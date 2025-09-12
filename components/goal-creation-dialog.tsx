@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
 import { createClient } from "@/lib/supabase/client"
-import { Plus, Target } from "lucide-react"
+import { Plus, Target, CalendarPlus, Bell } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 interface GoalCreationDialogProps {
@@ -25,6 +26,8 @@ export function GoalCreationDialog({ userId, trigger }: GoalCreationDialogProps)
     description: "",
     target_amount: "",
     target_date: "",
+    sync_to_calendar: true,
+    milestone_notifications: true,
   })
   const router = useRouter()
 
@@ -46,8 +49,36 @@ export function GoalCreationDialog({ userId, trigger }: GoalCreationDialogProps)
 
       if (error) throw error
 
+      if (formData.sync_to_calendar && formData.target_date) {
+        try {
+          await fetch("/api/calendar/sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              type: "goal_milestone",
+              data: {
+                name: formData.name,
+                targetAmount: Number.parseFloat(formData.target_amount),
+                currentAmount: 0,
+                targetDate: formData.target_date,
+              },
+            }),
+          })
+        } catch (calendarError) {
+          console.error("Calendar sync failed:", calendarError)
+          // Don't fail the entire operation if calendar sync fails
+        }
+      }
+
       setOpen(false)
-      setFormData({ name: "", description: "", target_amount: "", target_date: "" })
+      setFormData({
+        name: "",
+        description: "",
+        target_amount: "",
+        target_date: "",
+        sync_to_calendar: true,
+        milestone_notifications: true,
+      })
       router.refresh()
     } catch (error) {
       console.error("Error creating goal:", error)
@@ -113,6 +144,34 @@ export function GoalCreationDialog({ userId, trigger }: GoalCreationDialogProps)
               onChange={(e) => setFormData({ ...formData, target_date: e.target.value })}
             />
           </div>
+
+          <div className="space-y-3 pt-2 border-t">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="sync_to_calendar"
+                checked={formData.sync_to_calendar}
+                onCheckedChange={(checked) => setFormData({ ...formData, sync_to_calendar: checked as boolean })}
+                disabled={!formData.target_date}
+              />
+              <Label htmlFor="sync_to_calendar" className="flex items-center text-sm">
+                <CalendarPlus className="w-4 h-4 mr-1 text-blue-600" />
+                Sync milestone to Google Calendar
+                {!formData.target_date && <span className="text-xs text-gray-500 ml-1">(requires target date)</span>}
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="milestone_notifications"
+                checked={formData.milestone_notifications}
+                onCheckedChange={(checked) => setFormData({ ...formData, milestone_notifications: checked as boolean })}
+              />
+              <Label htmlFor="milestone_notifications" className="flex items-center text-sm">
+                <Bell className="w-4 h-4 mr-1 text-purple-600" />
+                Progress notifications via SendPulse
+              </Label>
+            </div>
+          </div>
+
           <div className="flex justify-end space-x-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel

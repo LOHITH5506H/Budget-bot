@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 import { createClient } from "@/lib/supabase/client"
-import { Plus, Calendar } from "lucide-react"
+import { Plus, Calendar, CalendarPlus, Bell } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 interface SubscriptionCreationDialogProps {
@@ -25,6 +26,8 @@ export function SubscriptionCreationDialog({ userId, trigger }: SubscriptionCrea
     amount: "",
     billing_cycle: "monthly",
     next_due_date: "",
+    sync_to_calendar: true,
+    email_notifications: true,
   })
   const router = useRouter()
 
@@ -50,8 +53,36 @@ export function SubscriptionCreationDialog({ userId, trigger }: SubscriptionCrea
 
       if (error) throw error
 
+      if (formData.sync_to_calendar) {
+        try {
+          await fetch("/api/calendar/sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              type: "bill_reminder",
+              data: {
+                name: formData.name,
+                amount: Number.parseFloat(formData.amount),
+                dueDate: formData.next_due_date,
+                description: `${formData.billing_cycle} subscription - ${formData.name}`,
+              },
+            }),
+          })
+        } catch (calendarError) {
+          console.error("Calendar sync failed:", calendarError)
+          // Don't fail the entire operation if calendar sync fails
+        }
+      }
+
       setOpen(false)
-      setFormData({ name: "", amount: "", billing_cycle: "monthly", next_due_date: "" })
+      setFormData({
+        name: "",
+        amount: "",
+        billing_cycle: "monthly",
+        next_due_date: "",
+        sync_to_calendar: true,
+        email_notifications: true,
+      })
       router.refresh()
     } catch (error) {
       console.error("Error creating subscription:", error)
@@ -125,6 +156,32 @@ export function SubscriptionCreationDialog({ userId, trigger }: SubscriptionCrea
               required
             />
           </div>
+
+          <div className="space-y-3 pt-2 border-t">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="sync_to_calendar"
+                checked={formData.sync_to_calendar}
+                onCheckedChange={(checked) => setFormData({ ...formData, sync_to_calendar: checked as boolean })}
+              />
+              <Label htmlFor="sync_to_calendar" className="flex items-center text-sm">
+                <CalendarPlus className="w-4 h-4 mr-1 text-emerald-600" />
+                Sync to Google Calendar
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="email_notifications"
+                checked={formData.email_notifications}
+                onCheckedChange={(checked) => setFormData({ ...formData, email_notifications: checked as boolean })}
+              />
+              <Label htmlFor="email_notifications" className="flex items-center text-sm">
+                <Bell className="w-4 h-4 mr-1 text-blue-600" />
+                Email reminders via SendPulse
+              </Label>
+            </div>
+          </div>
+
           <div className="flex justify-end space-x-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancel
