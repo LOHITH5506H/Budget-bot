@@ -11,9 +11,12 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient()
 
-    // Fetch recent spending data
-    const currentMonth = new Date().toISOString().slice(0, 7)
-    const { data: expenses } = await supabase
+    const now = new Date()
+    const currentMonth = now.toISOString().slice(0, 7)
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+    const nextMonthStr = nextMonth.toISOString().split("T")[0]
+
+    const { data: expenses, error } = await supabase
       .from("expenses")
       .select(`
         amount,
@@ -23,15 +26,16 @@ export async function POST(request: NextRequest) {
       `)
       .eq("user_id", userId)
       .gte("expense_date", `${currentMonth}-01`)
+      .lt("expense_date", nextMonthStr)
       .order("expense_date", { ascending: false })
       .limit(20)
 
-    // Fetch savings goals
-    const { data: goals } = await supabase
-      .from("savings_goals")
-      .select("name, target_amount, current_amount")
-      .eq("user_id", userId)
-      .eq("is_active", true)
+    if (error) {
+      console.error("[v0] Database query error:", error)
+      return NextResponse.json({
+        insight: "Unable to fetch spending data. Start tracking your expenses to get personalized insights!",
+      })
+    }
 
     if (!expenses || expenses.length === 0) {
       return NextResponse.json({
@@ -46,6 +50,13 @@ export async function POST(request: NextRequest) {
       .reduce((sum, exp) => sum + Number.parseFloat(exp.amount), 0)
     const needSpending = totalSpent - wantSpending
     const wantPercentage = (wantSpending / totalSpent) * 100
+
+    // Fetch savings goals
+    const { data: goals } = await supabase
+      .from("savings_goals")
+      .select("name, target_amount, current_amount")
+      .eq("user_id", userId)
+      .eq("is_active", true)
 
     // Create context for Gemini API
     const spendingContext = {

@@ -29,7 +29,11 @@ export function SpendingOverviewWidget({ userId }: SpendingOverviewWidgetProps) 
     const fetchSpendingData = async () => {
       console.log("[v0] Fetching spending data for user:", userId)
       const supabase = createClient()
-      const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM format
+
+      const now = new Date()
+      const currentMonth = now.toISOString().slice(0, 7) // YYYY-MM format
+      const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+      const nextMonthStr = nextMonth.toISOString().split("T")[0] // YYYY-MM-DD format
 
       const { data: expenses, error } = await supabase
         .from("expenses")
@@ -44,7 +48,7 @@ export function SpendingOverviewWidget({ userId }: SpendingOverviewWidgetProps) 
         `)
         .eq("user_id", userId)
         .gte("expense_date", `${currentMonth}-01`)
-        .lt("expense_date", `${currentMonth}-32`)
+        .lt("expense_date", nextMonthStr)
 
       console.log("[v0] Expenses query result:", { expenses, error })
 
