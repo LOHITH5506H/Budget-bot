@@ -15,9 +15,6 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 -- Create RLS policies for subscriptions
 ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
 
-ALTER TABLE public.savings_goals
-ADD COLUMN IF NOT EXISTS description TEXT;
-
 CREATE POLICY "Users can view their own subscriptions" ON subscriptions
   FOR SELECT USING (auth.uid() = user_id);
 

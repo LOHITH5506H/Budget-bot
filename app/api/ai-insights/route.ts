@@ -88,9 +88,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Call Gemini API for personalized insights
+    console.log("[v0] Making Gemini API request...")
+
     const geminiResponse = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=" +
-        process.env.GEMINI_API_KEY,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: {
@@ -102,35 +103,48 @@ export async function POST(request: NextRequest) {
               parts: [
                 {
                   text: `As a personal finance advisor, provide a brief, actionable insight (max 2 sentences) based on this spending data:
-            
-            Total spent this month: ₹${totalSpent}
-            Needs: ₹${needSpending} (${((needSpending / totalSpent) * 100).toFixed(0)}%)
-            Wants: ₹${wantSpending} (${wantPercentage.toFixed(0)}%)
-            Transactions: ${expenses.length}
-            Top spending categories: ${Object.entries(spendingContext.topCategories)
-              .slice(0, 3)
-              .map(([cat, amt]) => `${cat}: ₹${amt}`)
-              .join(", ")}
-            Active savings goals: ${goals?.length || 0}
-            
-            Give specific, actionable advice to improve their financial habits. Use Indian Rupee (₹) format. Be encouraging but practical.`,
+
+Total spent this month: ₹${totalSpent}
+Needs: ₹${needSpending} (${((needSpending / totalSpent) * 100).toFixed(0)}%)
+Wants: ₹${wantSpending} (${wantPercentage.toFixed(0)}%)
+Transactions: ${expenses.length}
+Top spending categories: ${Object.entries(spendingContext.topCategories)
+                    .slice(0, 3)
+                    .map(([cat, amt]) => `${cat}: ₹${amt}`)
+                    .join(", ")}
+Active savings goals: ${goals?.length || 0}
+
+Give specific, actionable advice to improve their financial habits. Use Indian Rupee (₹) format. Be encouraging but practical.`,
                 },
               ],
             },
           ],
+          generationConfig: {
+            temperature: 0.7,
+            topK: 40,
+            topP: 0.95,
+            maxOutputTokens: 200,
+          },
         }),
       },
     )
 
+    console.log("[v0] Gemini API response status:", geminiResponse.status)
+
     if (!geminiResponse.ok) {
-      throw new Error("Gemini API request failed")
+      const errorText = await geminiResponse.text()
+      console.error("[v0] Gemini API error response:", errorText)
+      throw new Error(`Gemini API request failed: ${geminiResponse.status} - ${errorText}`)
     }
 
     const geminiData = await geminiResponse.json()
+    console.log("[v0] Gemini API response data:", JSON.stringify(geminiData, null, 2))
+
     const insight =
       geminiData.candidates?.[0]?.content?.parts?.[0]?.text ||
       `You've spent ₹${totalSpent.toLocaleString()} this month with ${wantPercentage.toFixed(0)}% on wants. Consider reducing want spending to boost your savings!`
 
+    console.log("[v0] Generated insight:", insight)
     return NextResponse.json({ insight })
   } catch (error) {
     console.error("AI Insights API error:", error)
