@@ -34,12 +34,17 @@ export function SubscriptionCreationDialog({ userId, trigger }: SubscriptionCrea
 
     try {
       const supabase = createClient()
+
+      const nextDueDate = new Date(formData.next_due_date)
+      const dueDate = nextDueDate.getDate() // Get day of month (1-31)
+
       const { error } = await supabase.from("subscriptions").insert({
         user_id: userId,
         name: formData.name,
         amount: Number.parseFloat(formData.amount),
         billing_cycle: formData.billing_cycle,
         next_due_date: formData.next_due_date,
+        due_date: dueDate, // Add the required due_date field
         is_active: true,
       })
 
