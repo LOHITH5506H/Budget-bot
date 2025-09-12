@@ -52,6 +52,8 @@ export function QuickExpenseWidget({ userId }: QuickExpenseWidgetProps) {
     const supabase = createClient()
 
     try {
+      console.log("[v0] Submitting expense:", { userId, amount, description, categoryId, isNeed })
+
       const { error } = await supabase.from("expenses").insert({
         user_id: userId,
         amount: Number.parseFloat(amount),
@@ -61,7 +63,12 @@ export function QuickExpenseWidget({ userId }: QuickExpenseWidgetProps) {
         expense_date: new Date().toISOString().split("T")[0],
       })
 
-      if (error) throw error
+      if (error) {
+        console.error("[v0] Error inserting expense:", error)
+        throw error
+      }
+
+      console.log("[v0] Expense added successfully")
 
       // Reset form
       setAmount("")
@@ -73,8 +80,11 @@ export function QuickExpenseWidget({ userId }: QuickExpenseWidgetProps) {
         description: `₹${amount} expense has been recorded.`,
       })
 
-      window.location.reload()
+      setTimeout(() => {
+        window.location.reload()
+      }, 1000)
     } catch (error) {
+      console.error("[v0] Failed to add expense:", error)
       toast({
         title: "Error",
         description: "Failed to add expense. Please try again.",

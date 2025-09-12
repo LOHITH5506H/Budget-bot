@@ -27,21 +27,32 @@ export function SpendingOverviewWidget({ userId }: SpendingOverviewWidgetProps) 
 
   useEffect(() => {
     const fetchSpendingData = async () => {
+      console.log("[v0] Fetching spending data for user:", userId)
       const supabase = createClient()
-      const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM format
 
-      const { data: expenses } = await supabase
+      const now = new Date()
+      const currentMonth = now.toISOString().slice(0, 7) // YYYY-MM format
+      const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+      const nextMonthStr = nextMonth.toISOString().split("T")[0] // YYYY-MM-DD format
+
+      const { data: expenses, error } = await supabase
         .from("expenses")
         .select(`
           amount,
           is_need,
-          categories!inner (name, color)
+          category_id,
+          categories (
+            name,
+            color
+          )
         `)
         .eq("user_id", userId)
         .gte("expense_date", `${currentMonth}-01`)
-        .lt("expense_date", `${currentMonth}-32`)
+        .lt("expense_date", nextMonthStr)
 
-      if (expenses) {
+      console.log("[v0] Expenses query result:", { expenses, error })
+
+      if (expenses && expenses.length > 0) {
         // Process category data
         const categoryMap = new Map<string, { amount: number; color: string }>()
         let needTotal = 0
@@ -71,11 +82,18 @@ export function SpendingOverviewWidget({ userId }: SpendingOverviewWidgetProps) 
           color: data.color,
         }))
 
+        console.log("[v0] Processed category data:", categorySpending)
+        console.log("[v0] Need/Want totals:", { needTotal, wantTotal })
+
         setCategoryData(categorySpending)
         setNeedWantData([
           { type: "Needs", amount: needTotal },
           { type: "Wants", amount: wantTotal },
         ])
+      } else {
+        console.log("[v0] No expenses found for current month")
+        setCategoryData([])
+        setNeedWantData([])
       }
 
       setLoading(false)
