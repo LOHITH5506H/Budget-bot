@@ -3,8 +3,9 @@ import { createClient } from "@/lib/supabase/server"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { Plus, Target, Calendar, IndianRupee } from "lucide-react"
+import { Target, Calendar, IndianRupee } from "lucide-react"
 import Link from "next/link"
+import { GoalCreationDialog } from "@/components/goal-creation-dialog"
 
 export default async function GoalsPage() {
   const supabase = await createClient()
@@ -51,10 +52,7 @@ export default async function GoalsPage() {
                 <Target className="w-12 h-12 text-blue-600 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">Create New Goal</h3>
                 <p className="text-gray-600 mb-4">Set a savings target and track your progress</p>
-                <Button className="bg-blue-600 hover:bg-blue-700">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Create Goal
-                </Button>
+                <GoalCreationDialog userId={user.id} />
               </div>
             </CardContent>
           </Card>

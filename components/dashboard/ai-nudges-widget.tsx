@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Lightbulb, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useEffect, useState } from "react"
-import { createClient } from "@/lib/supabase/client"
 
 interface AiNudgesWidgetProps {
   userId: string
@@ -16,39 +15,28 @@ export function AiNudgesWidget({ userId }: AiNudgesWidgetProps) {
 
   const generateNudge = async () => {
     setLoading(true)
-    const supabase = createClient()
 
-    // Fetch recent spending data
-    const currentMonth = new Date().toISOString().slice(0, 7)
-    const { data: expenses } = await supabase
-      .from("expenses")
-      .select("amount, is_need")
-      .eq("user_id", userId)
-      .gte("expense_date", `${currentMonth}-01`)
+    try {
+      const response = await fetch("/api/ai-insights", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ userId }),
+      })
 
-    if (expenses && expenses.length > 0) {
-      const totalSpent = expenses.reduce((sum, exp) => sum + Number.parseFloat(exp.amount), 0)
-      const wantSpending = expenses
-        .filter((exp) => !exp.is_need)
-        .reduce((sum, exp) => sum + Number.parseFloat(exp.amount), 0)
-      const wantPercentage = (wantSpending / totalSpent) * 100
+      if (!response.ok) {
+        throw new Error("Failed to fetch AI insights")
+      }
 
-      // Generate contextual nudges based on spending patterns
-      const nudges = [
-        `You've spent ₹${totalSpent.toLocaleString()} this month. Consider setting a monthly budget to track your progress.`,
-        `${wantPercentage.toFixed(0)}% of your spending went to 'wants' this month. Try reducing this to 30% for better savings.`,
-        `Great job tracking your expenses! You've logged ${expenses.length} transactions this month.`,
-        `Consider moving ₹${Math.round(wantSpending * 0.2)} from 'wants' to your savings goals this month.`,
-        `You're building great financial habits! Keep tracking to maintain your momentum.`,
-      ]
-
-      const randomNudge = nudges[Math.floor(Math.random() * nudges.length)]
-      setNudge(randomNudge)
-    } else {
-      setNudge("Start tracking your expenses to get personalized financial insights and tips!")
+      const data = await response.json()
+      setNudge(data.insight)
+    } catch (error) {
+      console.error("Error fetching AI insights:", error)
+      setNudge("Keep tracking your expenses to get personalized financial insights!")
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   useEffect(() => {

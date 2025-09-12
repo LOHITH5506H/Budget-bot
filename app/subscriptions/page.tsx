@@ -2,8 +2,9 @@ import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Plus, Calendar, IndianRupee } from "lucide-react"
+import { Calendar, IndianRupee } from "lucide-react"
 import Link from "next/link"
+import { SubscriptionCreationDialog } from "@/components/subscription-creation-dialog"
 
 export default async function SubscriptionsPage() {
   const supabase = await createClient()
@@ -20,13 +21,10 @@ export default async function SubscriptionsPage() {
   // Fetch subscriptions
   const { data: subscriptions } = await supabase
     .from("subscriptions")
-    .select(`
-      *,
-      categories (name, icon, color)
-    `)
+    .select("*")
     .eq("user_id", user.id)
     .eq("is_active", true)
-    .order("due_date")
+    .order("next_due_date")
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -50,13 +48,10 @@ export default async function SubscriptionsPage() {
           <Card className="border-dashed border-2 border-emerald-300 bg-emerald-50">
             <CardContent className="p-6">
               <div className="text-center">
-                <Plus className="w-12 h-12 text-emerald-600 mx-auto mb-4" />
+                <Calendar className="w-12 h-12 text-emerald-600 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">Add New Subscription</h3>
                 <p className="text-gray-600 mb-4">Track your recurring bills and subscriptions</p>
-                <Button className="bg-emerald-600 hover:bg-emerald-700">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Subscription
-                </Button>
+                <SubscriptionCreationDialog userId={user.id} />
               </div>
             </CardContent>
           </Card>
@@ -69,12 +64,12 @@ export default async function SubscriptionsPage() {
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-4">
-                        <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                          {subscription.categories?.icon || "📄"}
+                        <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center">
+                          <Calendar className="w-6 h-6 text-emerald-600" />
                         </div>
                         <div>
                           <h3 className="font-semibold text-gray-900">{subscription.name}</h3>
-                          <p className="text-sm text-gray-600">{subscription.categories?.name}</p>
+                          <p className="text-sm text-gray-600 capitalize">{subscription.billing_cycle}</p>
                         </div>
                       </div>
                       <div className="text-right">
@@ -84,7 +79,7 @@ export default async function SubscriptionsPage() {
                         </div>
                         <div className="flex items-center text-sm text-gray-600">
                           <Calendar className="w-4 h-4 mr-1" />
-                          Due: {subscription.due_date}th
+                          Due: {new Date(subscription.next_due_date).toLocaleDateString()}
                         </div>
                       </div>
                     </div>
