@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
-import { createBillReminderEvent, createGoalMilestoneEvent } from "@/lib/google-calendar"
+import { createBillReminderEvent, createGoalMilestoneEvent, createRecurringSubscriptionReminder } from "@/lib/google-calendar"
 
 export async function POST(request: NextRequest) {
   try {
@@ -39,6 +39,17 @@ export async function POST(request: NextRequest) {
           data.name,
           new Date(data.dueDate),
           data.amount,
+          data.description,
+        )
+        break
+
+      case "subscription_reminder":
+        eventId = await createRecurringSubscriptionReminder(
+          calendarId,
+          data.name,
+          data.amount,
+          data.billingCycle,
+          new Date(data.nextDueDate),
           data.description,
         )
         break

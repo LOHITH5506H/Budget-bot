@@ -29,6 +29,7 @@ export function SubscriptionCreationDialog({ userId, trigger }: SubscriptionCrea
     sync_to_calendar: true,
     email_notifications: true,
   })
+  const [calendarStatus, setCalendarStatus] = useState<"idle" | "syncing" | "success" | "error">("idle")
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -55,22 +56,60 @@ export function SubscriptionCreationDialog({ userId, trigger }: SubscriptionCrea
 
       if (formData.sync_to_calendar) {
         try {
-          await fetch("/api/calendar/sync", {
+          const calendarResponse = await fetch("/api/calendar/sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              type: "subscription_reminder",
+              data: {
+                name: formData.name,
+                amount: Number.parseFloat(formData.amount),
+                billingCycle: formData.billing_cycle,
+                nextDueDate: formData.next_due_date,
+                description: `${formData.billing_cycle} subscription - ${formData.name}`,
+              },
+            }),
+          })
+
+          if (calendarResponse.ok) {
+            const calendarData = await calendarResponse.json()
+            // Update the subscription with the calendar event ID for future reference
+            if (calendarData.eventId) {
+              await supabase
+                .from("subscriptions")
+                .update({ calendar_event_id: calendarData.eventId })
+                .eq("user_id", userId)
+                .eq("name", formData.name)
+                .eq("amount", Number.parseFloat(formData.amount))
+            }
+          }
+        } catch (calendarError) {
+          console.error("Calendar sync failed:", calendarError)
+          // Don't fail the entire operation if calendar sync fails
+        }
+      }
+
+      // Send email notification if enabled
+      if (formData.email_notifications) {
+        try {
+          await fetch("/api/notifications/send", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               type: "bill_reminder",
               data: {
-                name: formData.name,
+                billName: formData.name,
                 amount: Number.parseFloat(formData.amount),
                 dueDate: formData.next_due_date,
-                description: `${formData.billing_cycle} subscription - ${formData.name}`,
+              },
+              recipients: {
+                email: [], // Will use user's email from session
               },
             }),
           })
-        } catch (calendarError) {
-          console.error("Calendar sync failed:", calendarError)
-          // Don't fail the entire operation if calendar sync fails
+        } catch (emailError) {
+          console.error("Email notification failed:", emailError)
+          // Don't fail the entire operation if email fails
         }
       }
 
@@ -83,6 +122,7 @@ export function SubscriptionCreationDialog({ userId, trigger }: SubscriptionCrea
         sync_to_calendar: true,
         email_notifications: true,
       })
+      setCalendarStatus("idle")
       router.refresh()
     } catch (error) {
       console.error("Error creating subscription:", error)
@@ -167,6 +207,9 @@ export function SubscriptionCreationDialog({ userId, trigger }: SubscriptionCrea
               <Label htmlFor="sync_to_calendar" className="flex items-center text-sm">
                 <CalendarPlus className="w-4 h-4 mr-1 text-emerald-600" />
                 Sync to Google Calendar
+                {calendarStatus === "syncing" && <span className="ml-2 text-xs text-yellow-600">Syncing...</span>}
+                {calendarStatus === "success" && <span className="ml-2 text-xs text-green-600">✓ Synced</span>}
+                {calendarStatus === "error" && <span className="ml-2 text-xs text-red-600">✗ Failed</span>}
               </Label>
             </div>
             <div className="flex items-center space-x-2">
