@@ -1,80 +1,89 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
-import { cookies } from "next/headers"
-import { createBillReminderEvent, createGoalMilestoneEvent, createRecurringSubscriptionReminder } from "@/lib/google-calendar"
+import { NextRequest, NextResponse } from "next/server"
+import { google } from "googleapis"
+import { createClient } from "@/lib/supabase/server"
 
 export async function POST(request: NextRequest) {
   try {
-    const { type, data } = await request.json()
+    const supabase = await createClient()
+    
+    // Get the current user's session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    
+    if (sessionError || !session) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    }
 
-    // Initialize Supabase client
-    const cookieStore = cookies()
-    const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
+    // Check if user has Google OAuth token
+    if (!session.provider_token) {
+      return NextResponse.json({ error: 'No Google access token found' }, { status: 401 })
+    }
+
+    const { subscription } = await request.json()
+
+    // Set up Google Calendar API
+    const oauth2Client = new google.auth.OAuth2()
+    oauth2Client.setCredentials({ access_token: session.provider_token })
+    
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client })
+
+    // Create calendar event
+    const startDate = new Date(subscription.next_due_date)
+    const endDate = new Date(startDate.getTime() + 60 * 60 * 1000) // 1 hour
+
+    // Determine recurrence pattern
+    let recurrence: string[] = []
+    switch (subscription.billing_cycle) {
+      case 'monthly':
+        recurrence = ['RRULE:FREQ=MONTHLY;COUNT=24']
+        break
+      case 'yearly':
+        recurrence = ['RRULE:FREQ=YEARLY;COUNT=5']
+        break
+      case 'weekly':
+        recurrence = ['RRULE:FREQ=WEEKLY;COUNT=52']
+        break
+      case 'quarterly':
+        recurrence = ['RRULE:FREQ=MONTHLY;INTERVAL=3;COUNT=20']
+        break
+    }
+
+    const event = {
+      summary: `💰 ${subscription.name} - ₹${subscription.amount}`,
+      description: `Billing reminder for ${subscription.name}\nAmount: ₹${subscription.amount}\nBilling cycle: ${subscription.billing_cycle}`,
+      start: {
+        dateTime: startDate.toISOString(),
+        timeZone: 'Asia/Kolkata',
       },
+      end: {
+        dateTime: endDate.toISOString(),
+        timeZone: 'Asia/Kolkata',
+      },
+      recurrence,
+      reminders: {
+        useDefault: false,
+        overrides: [
+          { method: 'email', minutes: 24 * 60 }, // 1 day before
+          { method: 'popup', minutes: 60 }, // 1 hour before
+        ],
+      },
+    }
+
+    const result = await calendar.events.insert({
+      calendarId: 'primary',
+      requestBody: event,
     })
 
-    // Get user's calendar settings
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    return NextResponse.json({
+      success: true,
+      eventId: result.data.id,
+      message: 'Calendar event created successfully'
+    })
 
-    // Get user's calendar ID from profile or use default
-    const { data: profile } = await supabase.from("profiles").select("google_calendar_id").eq("id", user.id).single()
-
-    const calendarId = profile?.google_calendar_id || process.env.GOOGLE_CALENDAR_ID || "primary"
-
-    let eventId: string | null = null
-
-    switch (type) {
-      case "bill_reminder":
-        eventId = await createBillReminderEvent(
-          calendarId,
-          data.name,
-          new Date(data.dueDate),
-          data.amount,
-          data.description,
-        )
-        break
-
-      case "subscription_reminder":
-        eventId = await createRecurringSubscriptionReminder(
-          calendarId,
-          data.name,
-          data.amount,
-          data.billingCycle,
-          new Date(data.nextDueDate),
-          data.description,
-        )
-        break
-
-      case "goal_milestone":
-        eventId = await createGoalMilestoneEvent(
-          calendarId,
-          data.name,
-          new Date(data.targetDate),
-          data.targetAmount,
-          data.currentAmount,
-        )
-        break
-
-      default:
-        return NextResponse.json({ error: "Invalid sync type" }, { status: 400 })
-    }
-
-    if (eventId) {
-      return NextResponse.json({ success: true, eventId })
-    } else {
-      return NextResponse.json({ error: "Failed to create calendar event" }, { status: 500 })
-    }
   } catch (error) {
-    console.error("Calendar sync error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error('Calendar sync error:', error)
+    return NextResponse.json(
+      { error: 'Failed to sync with calendar' },
+      { status: 500 }
+    )
   }
 }

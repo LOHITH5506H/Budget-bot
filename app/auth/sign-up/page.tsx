@@ -5,56 +5,34 @@ import type React from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { TrendingUp, ArrowLeft } from "lucide-react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { useState } from "react"
 
 export default function SignUpPage() {
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
-  const [displayName, setDisplayName] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const router = useRouter()
 
-  const handleSignUp = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleGoogleSignUp = async () => {
     const supabase = createClient()
     setIsLoading(true)
     setError(null)
 
-    if (password !== confirmPassword) {
-      setError("Passwords do not match")
-      setIsLoading(false)
-      return
-    }
-
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters long")
-      setIsLoading(false)
-      return
-    }
-
     try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
         options: {
-          emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || `${window.location.origin}/dashboard`,
-          data: {
-            display_name: displayName || email.split("@")[0],
+          redirectTo: `${window.location.origin}/auth/callback`,
+          scopes: 'https://www.googleapis.com/auth/calendar',
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
           },
         },
       })
       if (error) throw error
-      router.push("/auth/sign-up-success")
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred")
-    } finally {
       setIsLoading(false)
     }
   }
@@ -82,73 +60,18 @@ export default function SignUpPage() {
             <CardDescription className="text-gray-600">Start your journey to better financial habits</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSignUp} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="displayName" className="text-sm font-medium text-gray-700">
-                  Display Name (Optional)
-                </Label>
-                <Input
-                  id="displayName"
-                  type="text"
-                  placeholder="How should we call you?"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  className="h-11"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-sm font-medium text-gray-700">
-                  Email
-                </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="Enter your email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="h-11"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-sm font-medium text-gray-700">
-                  Password
-                </Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Create a password (min. 6 characters)"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="h-11"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700">
-                  Confirm Password
-                </Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="Confirm your password"
-                  required
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="h-11"
-                />
-              </div>
+            <div className="space-y-6">
               {error && (
                 <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg">{error}</div>
               )}
               <Button
-                type="submit"
+                onClick={handleGoogleSignUp}
                 className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white"
                 disabled={isLoading}
               >
-                {isLoading ? "Creating account..." : "Create Account"}
+                {isLoading ? "Connecting to Google..." : "Continue with Google"}
               </Button>
-            </form>
+            </div>
             <div className="mt-6 text-center text-sm text-gray-600">
               Already have an account?{" "}
               <Link href="/auth/login" className="text-emerald-600 hover:text-emerald-700 font-medium">
