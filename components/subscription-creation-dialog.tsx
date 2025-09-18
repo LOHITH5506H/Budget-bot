@@ -54,13 +54,44 @@ export function SubscriptionCreationDialog({ userId, trigger }: SubscriptionCrea
 
       if (error) throw error
 
-      // Check if the due date is today and send immediate notification
-      const today = new Date()
-      const isToday = nextDueDate.toDateString() === today.toDateString()
-      
-      if (isToday && formData.email_notifications) {
+      if (formData.sync_to_calendar) {
         try {
-          // Send immediate notification for same-day due date
+          const calendarResponse = await fetch("/api/calendar/sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              type: "subscription_reminder",
+              data: {
+                name: formData.name,
+                amount: Number.parseFloat(formData.amount),
+                billingCycle: formData.billing_cycle,
+                nextDueDate: formData.next_due_date,
+                description: `${formData.billing_cycle} subscription - ${formData.name}`,
+              },
+            }),
+          })
+
+          if (calendarResponse.ok) {
+            const calendarData = await calendarResponse.json()
+            // Update the subscription with the calendar event ID for future reference
+            if (calendarData.eventId) {
+              await supabase
+                .from("subscriptions")
+                .update({ calendar_event_id: calendarData.eventId })
+                .eq("user_id", userId)
+                .eq("name", formData.name)
+                .eq("amount", Number.parseFloat(formData.amount))
+            }
+          }
+        } catch (calendarError) {
+          console.error("Calendar sync failed:", calendarError)
+          // Don't fail the entire operation if calendar sync fails
+        }
+      }
+
+      // Send email notification if enabled
+      if (formData.email_notifications) {
+        try {
           await fetch("/api/notifications/send", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
