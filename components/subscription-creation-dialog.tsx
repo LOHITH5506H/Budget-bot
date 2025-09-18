@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { createClient } from "@/lib/supabase/client"
-import { Plus, Calendar, CalendarPlus, Bell } from "lucide-react"
+import { Plus, Calendar, Bell } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 interface SubscriptionCreationDialogProps {
@@ -42,7 +42,7 @@ export function SubscriptionCreationDialog({ userId, trigger }: SubscriptionCrea
       const nextDueDate = new Date(formData.next_due_date)
       const dueDate = nextDueDate.getDate() // Get day of month (1-31)
 
-      const { error } = await supabase.from("subscriptions").insert({
+      const { data: insertedSubscription, error } = await supabase.from("subscriptions").insert({
         user_id: userId,
         name: formData.name,
         amount: Number.parseFloat(formData.amount),
@@ -50,48 +50,17 @@ export function SubscriptionCreationDialog({ userId, trigger }: SubscriptionCrea
         next_due_date: formData.next_due_date,
         due_date: dueDate, // Add the required due_date field
         is_active: true,
-      })
+      }).select().single()
 
       if (error) throw error
 
-      if (formData.sync_to_calendar) {
+      // Check if the due date is today and send immediate notification
+      const today = new Date()
+      const isToday = nextDueDate.toDateString() === today.toDateString()
+      
+      if (isToday && formData.email_notifications) {
         try {
-          const calendarResponse = await fetch("/api/calendar/sync", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              type: "subscription_reminder",
-              data: {
-                name: formData.name,
-                amount: Number.parseFloat(formData.amount),
-                billingCycle: formData.billing_cycle,
-                nextDueDate: formData.next_due_date,
-                description: `${formData.billing_cycle} subscription - ${formData.name}`,
-              },
-            }),
-          })
-
-          if (calendarResponse.ok) {
-            const calendarData = await calendarResponse.json()
-            // Update the subscription with the calendar event ID for future reference
-            if (calendarData.eventId) {
-              await supabase
-                .from("subscriptions")
-                .update({ calendar_event_id: calendarData.eventId })
-                .eq("user_id", userId)
-                .eq("name", formData.name)
-                .eq("amount", Number.parseFloat(formData.amount))
-            }
-          }
-        } catch (calendarError) {
-          console.error("Calendar sync failed:", calendarError)
-          // Don't fail the entire operation if calendar sync fails
-        }
-      }
-
-      // Send email notification if enabled
-      if (formData.email_notifications) {
-        try {
+          // Send immediate notification for same-day due date
           await fetch("/api/notifications/send", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -107,9 +76,42 @@ export function SubscriptionCreationDialog({ userId, trigger }: SubscriptionCrea
               },
             }),
           })
+          console.log(`Sent immediate notification for ${formData.name} - due today!`)
         } catch (emailError) {
-          console.error("Email notification failed:", emailError)
-          // Don't fail the entire operation if email fails
+          console.error("Immediate email notification failed:", emailError)
+        }
+      }
+
+      // Sync to Google Calendar if enabled
+      if (formData.sync_to_calendar) {
+        try {
+          setCalendarStatus("syncing")
+          
+          const calendarResponse = await fetch("/api/calendar/sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              subscription: {
+                name: formData.name,
+                amount: Number.parseFloat(formData.amount),
+                billing_cycle: formData.billing_cycle,
+                next_due_date: formData.next_due_date,
+              },
+            }),
+          })
+
+          if (!calendarResponse.ok) {
+            throw new Error("Calendar sync failed")
+          }
+
+          const calendarResult = await calendarResponse.json()
+          console.log("Calendar sync successful:", calendarResult)
+          setCalendarStatus("success")
+          
+        } catch (calendarError) {
+          console.error("Calendar sync failed:", calendarError)
+          setCalendarStatus("error")
+          // Don't fail the entire operation if calendar sync fails
         }
       }
 
@@ -124,10 +126,32 @@ export function SubscriptionCreationDialog({ userId, trigger }: SubscriptionCrea
       })
       setCalendarStatus("idle")
       router.refresh()
+      
     } catch (error) {
       console.error("Error creating subscription:", error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Generate calendar event data for the Add to Calendar button
+  const getCalendarEvent = () => {
+    if (!formData.name || !formData.next_due_date) return null
+
+    const dueDate = new Date(formData.next_due_date)
+    const reminderDate = new Date(dueDate)
+    reminderDate.setDate(dueDate.getDate() - 1) // Reminder 1 day before
+
+    return {
+      name: `${formData.name} Payment Due`,
+      description: `${formData.billing_cycle} subscription payment of ₹${formData.amount} for ${formData.name}`,
+      startDate: reminderDate.toISOString().split('T')[0],
+      startTime: "09:00",
+      endTime: "09:30",
+      recurrence: formData.billing_cycle === 'monthly' ? 'FREQ=MONTHLY;INTERVAL=1' 
+                 : formData.billing_cycle === 'yearly' ? 'FREQ=YEARLY;INTERVAL=1'
+                 : 'FREQ=WEEKLY;INTERVAL=1',
+      uid: `subscription-${formData.name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`
     }
   }
 
@@ -205,7 +229,7 @@ export function SubscriptionCreationDialog({ userId, trigger }: SubscriptionCrea
                 onCheckedChange={(checked) => setFormData({ ...formData, sync_to_calendar: checked as boolean })}
               />
               <Label htmlFor="sync_to_calendar" className="flex items-center text-sm">
-                <CalendarPlus className="w-4 h-4 mr-1 text-emerald-600" />
+                <Calendar className="w-4 h-4 mr-1 text-emerald-600" />
                 Sync to Google Calendar
                 {calendarStatus === "syncing" && <span className="ml-2 text-xs text-yellow-600">Syncing...</span>}
                 {calendarStatus === "success" && <span className="ml-2 text-xs text-green-600">✓ Synced</span>}

@@ -77,10 +77,15 @@ export default async function SubscriptionsPage() {
                           <IndianRupee className="w-4 h-4 mr-1" />
                           {subscription.amount}
                         </div>
-                        <div className="flex items-center text-sm text-gray-600">
+                        <div className="flex items-center text-sm text-gray-600 mb-2">
                           <Calendar className="w-4 h-4 mr-1" />
                           Due: {new Date(subscription.next_due_date).toLocaleDateString()}
                         </div>
+                        {subscription.calendar_event_id ? (
+                          <span className="text-xs text-green-600">✓ Synced to Calendar</span>
+                        ) : (
+                          <span className="text-xs text-gray-500">Not synced</span>
+                        )}
                       </div>
                     </div>
                   </CardContent>

@@ -24,13 +24,15 @@ export class NotificationScheduler {
     })
   }
 
-  // Schedule bill reminder notifications
+  // Schedule bill reminder notifications - sends at 12:01 AM on due date
   async scheduleBillReminders() {
     try {
-      // Get all active subscriptions with due dates in the next 3 days
-      const threeDaysFromNow = new Date()
-      threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3)
+      const now = new Date()
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      const tomorrow = new Date(today)
+      tomorrow.setDate(tomorrow.getDate() + 1)
 
+      // Get all active subscriptions with due dates today or in the next few days
       const { data: subscriptions, error } = await this.supabase
         .from("subscriptions")
         .select(`
@@ -38,7 +40,8 @@ export class NotificationScheduler {
           profiles!inner(email, notification_preferences)
         `)
         .eq("is_active", true)
-        .lte("next_due_date", threeDaysFromNow.toISOString())
+        .gte("next_due_date", today.toISOString())
+        .lte("next_due_date", tomorrow.toISOString())
 
       if (error) throw error
 
@@ -46,19 +49,27 @@ export class NotificationScheduler {
 
       for (const subscription of subscriptions) {
         const user = subscription.profiles
+        const dueDate = new Date(subscription.next_due_date)
+        const dueDateOnly = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate())
 
         // Check if user has bill reminders enabled
         const preferences = user.notification_preferences || {}
         if (!preferences.bill_reminders_enabled) continue
 
-        // Check if we haven't already sent a reminder for this bill
+        // Check if today is the due date (for 12:01 AM notifications)
+        const isToday = dueDateOnly.getTime() === today.getTime()
+        
+        if (!isToday) continue
+
+        // Check if we haven't already sent a reminder for this bill today
+        const startOfToday = new Date(today)
         const { data: existingReminder } = await this.supabase
           .from("sent_notifications")
           .select("id")
           .eq("user_id", subscription.user_id)
           .eq("subscription_id", subscription.id)
           .eq("type", "bill_reminder")
-          .gte("sent_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()) // Last 7 days
+          .gte("sent_at", startOfToday.toISOString())
 
         if (existingReminder && existingReminder.length > 0) continue
 
@@ -85,12 +96,16 @@ export class NotificationScheduler {
               sent_at: new Date().toISOString(),
               channel: "email",
             })
+
+            console.log(`Sent bill reminder for ${subscription.name} to ${user.email}`)
+          } else {
+            console.error(`Failed to send bill reminder for ${subscription.name} to ${user.email}`)
           }
         }
 
         // Send SMS if enabled
         if (preferences.sms_notifications && user.phone) {
-          const smsMessage = `💰 BudgetBot Reminder: Your ${subscription.name} bill ($${subscription.amount}) is due on ${new Date(subscription.next_due_date).toLocaleDateString()}`
+          const smsMessage = `💰 BudgetBot Reminder: Your ${subscription.name} bill ($${subscription.amount}) is due TODAY!`
 
           const smsSent = await sendPulse.sendSMS({
             phones: [user.phone],
@@ -112,6 +127,89 @@ export class NotificationScheduler {
       console.log(`Processed ${subscriptions.length} subscription reminders`)
     } catch (error) {
       console.error("Error scheduling bill reminders:", error)
+    }
+  }
+
+  // Send immediate notification for subscriptions created on the same day as due date
+  async sendImmediateNotification(subscriptionId: string, userId: string) {
+    try {
+      const { data: subscription, error: subError } = await this.supabase
+        .from("subscriptions")
+        .select(`
+          *,
+          profiles!inner(email, notification_preferences)
+        `)
+        .eq("id", subscriptionId)
+        .eq("user_id", userId)
+        .single()
+
+      if (subError || !subscription) {
+        console.error("Subscription not found:", subError)
+        return false
+      }
+
+      const user = subscription.profiles
+      const preferences = user.notification_preferences || {}
+      
+      if (!preferences.bill_reminders_enabled || !preferences.email_notifications) {
+        return false
+      }
+
+      const dueDate = new Date(subscription.next_due_date)
+      const today = new Date()
+      const isToday = dueDate.toDateString() === today.toDateString()
+
+      if (!isToday) {
+        return false
+      }
+
+      // Check if we haven't already sent a notification for this subscription today
+      const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+      const { data: existingNotification } = await this.supabase
+        .from("sent_notifications")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("subscription_id", subscriptionId)
+        .eq("type", "bill_reminder")
+        .gte("sent_at", startOfToday.toISOString())
+
+      if (existingNotification && existingNotification.length > 0) {
+        return false
+      }
+
+      const sendPulse = getSendPulseClient()
+      const template = emailTemplates.billReminder(
+        subscription.name,
+        subscription.amount,
+        dueDate.toLocaleDateString(),
+      )
+
+      const emailSent = await sendPulse.sendEmail({
+        to: [user.email],
+        subject: `🚨 URGENT: ${template.subject}`,
+        html: template.html.replace(
+          "Bill Due Soon",
+          "Bill Due TODAY - Just Added!"
+        ),
+      })
+
+      if (emailSent) {
+        await this.supabase.from("sent_notifications").insert({
+          user_id: userId,
+          subscription_id: subscriptionId,
+          type: "bill_reminder",
+          sent_at: new Date().toISOString(),
+          channel: "email",
+        })
+
+        console.log(`Sent immediate notification for ${subscription.name} to ${user.email}`)
+        return true
+      }
+
+      return false
+    } catch (error) {
+      console.error("Error sending immediate notification:", error)
+      return false
     }
   }
 
