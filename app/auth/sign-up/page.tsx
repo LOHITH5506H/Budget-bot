@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { TrendingUp, ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -44,14 +45,14 @@ export default function SignUpPage() {
         email,
         password,
         options: {
-          emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || `${window.location.origin}/dashboard`,
           data: {
             display_name: displayName || email.split("@")[0],
           },
         },
       })
       if (error) throw error
-      router.push("/auth/sign-up-success")
+      // With email confirmation disabled, sign up automatically logs in
+      router.push("/dashboard")
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred")
     } finally {
@@ -146,7 +147,14 @@ export default function SignUpPage() {
                 className="w-full h-11 bg-emerald-600 hover:bg-emerald-700 text-white"
                 disabled={isLoading}
               >
-                {isLoading ? "Creating account..." : "Create Account"}
+                {isLoading ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <LoadingSpinner size="sm" />
+                    <span>Creating account...</span>
+                  </div>
+                ) : (
+                  "Create Account"
+                )}
               </Button>
             </form>
             <div className="mt-6 text-center text-sm text-gray-600">

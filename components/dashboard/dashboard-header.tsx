@@ -9,9 +9,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { TrendingUp, Settings, LogOut, User, CreditCard, Target, BarChart3 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
+import { useState } from "react"
 import Link from "next/link"
 
 interface DashboardHeaderProps {
@@ -21,8 +23,10 @@ interface DashboardHeaderProps {
 
 export function DashboardHeader({ user, profile }: DashboardHeaderProps) {
   const router = useRouter()
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   const handleSignOut = async () => {
+    setIsLoggingOut(true)
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push("/")
@@ -76,11 +80,11 @@ export function DashboardHeader({ user, profile }: DashboardHeaderProps) {
           {/* User Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+              <button className="relative h-10 w-10 rounded-full hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2">
                 <Avatar className="h-10 w-10">
                   <AvatarFallback className="bg-emerald-100 text-emerald-700 font-semibold">{initials}</AvatarFallback>
                 </Avatar>
-              </Button>
+              </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-56" align="end" forceMount>
               <div className="flex flex-col space-y-1 p-2">
@@ -99,9 +103,24 @@ export function DashboardHeader({ user, profile }: DashboardHeaderProps) {
                 </DropdownMenuItem>
               </Link>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="cursor-pointer text-red-600" onClick={handleSignOut}>
-                <LogOut className="mr-2 h-4 w-4" />
-                <span>Sign out</span>
+              <DropdownMenuItem 
+                className="cursor-pointer text-red-600" 
+                onClick={handleSignOut}
+                disabled={isLoggingOut}
+              >
+                <div className="flex items-center gap-2">
+                  {isLoggingOut ? (
+                    <>
+                      <LoadingSpinner size="sm" />
+                      <span>Signing out...</span>
+                    </>
+                  ) : (
+                    <>
+                      <LogOut className="h-4 w-4" />
+                      <span>Sign out</span>
+                    </>
+                  )}
+                </div>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

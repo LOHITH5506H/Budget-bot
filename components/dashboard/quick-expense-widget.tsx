@@ -35,10 +35,18 @@ export function QuickExpenseWidget({ userId }: QuickExpenseWidgetProps) {
   useEffect(() => {
     const fetchCategories = async () => {
       const supabase = createClient()
-      const { data } = await supabase.from("categories").select("id, name, icon").order("name")
+      console.log("[QuickExpense] Fetching categories...")
+      const { data, error } = await supabase.from("categories").select("id, name, icon").order("name")
+      console.log("[QuickExpense] Categories response:", { data, error })
       if (data) {
         setCategories(data)
-        setCategoryId(data[0]?.id || "")
+        if (data[0]) {
+          setCategoryId(data[0].id)
+          console.log("[QuickExpense] Default category set to:", data[0].id)
+        }
+      }
+      if (error) {
+        console.error("[QuickExpense] Error fetching categories:", error)
       }
     }
     fetchCategories()
@@ -129,7 +137,7 @@ export function QuickExpenseWidget({ userId }: QuickExpenseWidgetProps) {
                 Category
               </Label>
               <Select value={categoryId} onValueChange={setCategoryId}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
