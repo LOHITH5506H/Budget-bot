@@ -6,7 +6,8 @@ import { Progress } from "@/components/ui/progress"
 import { Target, Plus } from "lucide-react"
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
-import Link from "next/link"
+import { GoalCreationDialog } from "@/components/goal-creation-dialog"
+import { useLoadingNavigation } from "@/hooks/use-loading-navigation"
 
 interface SavingsGoalsWidgetProps {
   userId: string
@@ -23,6 +24,7 @@ interface SavingsGoal {
 export function SavingsGoalsWidget({ userId }: SavingsGoalsWidgetProps) {
   const [goals, setGoals] = useState<SavingsGoal[]>([])
   const [loading, setLoading] = useState(true)
+  const { navigateWithLoading } = useLoadingNavigation()
 
   useEffect(() => {
     const fetchGoals = async () => {
@@ -68,11 +70,14 @@ export function SavingsGoalsWidget({ userId }: SavingsGoalsWidgetProps) {
             <Target className="w-5 h-5 mr-2 text-blue-600" />
             Savings Goals
           </div>
-          <Link href="/goals">
-            <Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-700">
-              <Plus className="w-4 h-4" />
-            </Button>
-          </Link>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="text-blue-600 hover:text-blue-700"
+            onClick={() => navigateWithLoading("/goals")}
+          >
+            <Plus className="w-4 h-4" />
+          </Button>
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-0">
@@ -94,21 +99,27 @@ export function SavingsGoalsWidget({ userId }: SavingsGoalsWidgetProps) {
                 </div>
               )
             })}
-            <Link href="/goals">
-              <Button variant="outline" size="sm" className="w-full mt-3 bg-transparent">
-                View All Goals
-              </Button>
-            </Link>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full mt-3 bg-transparent"
+              onClick={() => navigateWithLoading("/goals")}
+            >
+              View All Goals
+            </Button>
           </div>
         ) : (
           <div className="text-center py-6">
             <Target className="w-12 h-12 text-blue-300 mx-auto mb-3" />
             <p className="text-sm text-gray-600 mb-3">No savings goals yet</p>
-            <Link href="/goals">
-              <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
-                Create Your First Goal
-              </Button>
-            </Link>
+            <GoalCreationDialog
+              userId={userId}
+              trigger={
+                <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
+                  Create Your First Goal
+                </Button>
+              }
+            />
           </div>
         )}
       </CardContent>

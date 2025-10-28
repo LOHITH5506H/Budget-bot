@@ -1,12 +1,14 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { Bell, Mail, MessageSquare, Calendar, Target, CreditCard, Settings, Check } from "lucide-react"
+import { Bell, Mail, MessageSquare, Calendar, Target, CreditCard, Settings, Check, Wifi, WifiOff, X, Download } from "lucide-react"
+import { usePusher } from "@/hooks/use-pusher"
+import { useToast } from "@/hooks/use-toast"
 
 interface NotificationPreference {
   id: string
@@ -19,11 +21,31 @@ interface NotificationPreference {
   enabled: boolean
 }
 
+interface Notification {
+  id: string
+  type: string
+  title: string
+  message: string
+  timestamp: Date
+  read: boolean
+  actionUrl?: string
+  priority?: "low" | "medium" | "high"
+}
+
 interface NotificationCenterProps {
   userId: string
 }
 
 export function NotificationCenter({ userId }: NotificationCenterProps) {
+  const { toast } = useToast()
+  const { 
+    isConnected, 
+    notifications: pusherNotifications, 
+    markAsRead: markPusherAsRead, 
+    clearAll: clearPusherNotifications,
+    sendTestNotification: sendPusherTestNotification 
+  } = usePusher({ userId })
+  
   const [preferences, setPreferences] = useState<NotificationPreference[]>([
     {
       id: "1",
@@ -67,7 +89,7 @@ export function NotificationCenter({ userId }: NotificationCenterProps) {
     },
   ])
 
-  const [recentNotifications, setRecentNotifications] = useState([
+  const [localNotifications, setLocalNotifications] = useState<Notification[]>([
     {
       id: "1",
       type: "bill_reminder",
@@ -75,6 +97,7 @@ export function NotificationCenter({ userId }: NotificationCenterProps) {
       message: "Your Netflix subscription ($15.99) is due tomorrow",
       timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
       read: false,
+      priority: "high"
     },
     {
       id: "2",
@@ -83,8 +106,23 @@ export function NotificationCenter({ userId }: NotificationCenterProps) {
       message: "Congratulations! You've reached 50% of your vacation fund goal",
       timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
       read: true,
+      priority: "medium"
     },
   ])
+
+  // Merge and sort notifications from both sources
+  const allNotifications = [
+    ...localNotifications,
+    ...pusherNotifications.map(pn => ({
+      id: pn.id,
+      type: pn.type,
+      title: pn.title,
+      message: pn.message,
+      timestamp: new Date(pn.timestamp),
+      read: pn.read || false,
+      priority: "medium" as const
+    } as Notification))
+  ].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
 
   const [loading, setLoading] = useState(false)
 
@@ -95,48 +133,53 @@ export function NotificationCenter({ userId }: NotificationCenterProps) {
     console.log(`Updated preference ${id}: ${field} = ${value}`)
   }
 
-  const sendTestNotification = async (type: string) => {
+  const handleTestNotification = async () => {
     setLoading(true)
     try {
-      const response = await fetch("/api/notifications/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      // Use the Pusher test notification function
+      await sendPusherTestNotification()
+      
+      // Also add to local notifications for immediate feedback
+      setLocalNotifications((prev) => [
+        {
+          id: Date.now().toString(),
           type: "bill_reminder",
-          data: {
-            billName: "Test Subscription",
-            amount: 9.99,
-            dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-          },
-          recipients: {
-            email: ["user@example.com"], // This would be the actual user's email
-          },
-        }),
+          title: "Test notification sent",
+          message: "Check your real-time notifications - test sent via Pusher!",
+          timestamp: new Date(),
+          read: false,
+          priority: "medium"
+        },
+        ...prev,
+      ])
+      
+      toast({
+        title: "Test notification sent",
+        description: "Check your notifications panel for the real-time update",
       })
-
-      if (response.ok) {
-        // Add to recent notifications
-        setRecentNotifications((prev) => [
-          {
-            id: Date.now().toString(),
-            type: "bill_reminder",
-            title: "Test notification sent",
-            message: "Check your email for the test notification",
-            timestamp: new Date(),
-            read: false,
-          },
-          ...prev,
-        ])
-      }
     } catch (error) {
       console.error("Failed to send test notification:", error)
+      toast({
+        title: "Error",
+        description: "Failed to send test notification",
+        variant: "destructive"
+      })
     } finally {
       setLoading(false)
     }
   }
 
   const markAsRead = (id: string) => {
-    setRecentNotifications((prev) => prev.map((notif) => (notif.id === id ? { ...notif, read: true } : notif)))
+    // Try to mark as read in Pusher notifications first
+    markPusherAsRead(id)
+    
+    // Also mark in local notifications
+    setLocalNotifications((prev) => prev.map((notif) => (notif.id === id ? { ...notif, read: true } : notif)))
+  }
+
+  const clearAllNotifications = () => {
+    clearPusherNotifications()
+    setLocalNotifications([])
   }
 
   const getTypeIcon = (type: string) => {
@@ -202,7 +245,6 @@ export function NotificationCenter({ userId }: NotificationCenterProps) {
                     <Switch
                       checked={pref.email}
                       onCheckedChange={(checked) => updatePreference(pref.id, "email", checked)}
-                      size="sm"
                     />
                     <Label className="flex items-center text-sm">
                       <Mail className="w-3 h-3 mr-1" />
@@ -214,7 +256,6 @@ export function NotificationCenter({ userId }: NotificationCenterProps) {
                     <Switch
                       checked={pref.sms}
                       onCheckedChange={(checked) => updatePreference(pref.id, "sms", checked)}
-                      size="sm"
                     />
                     <Label className="flex items-center text-sm">
                       <MessageSquare className="w-3 h-3 mr-1" />
@@ -226,7 +267,6 @@ export function NotificationCenter({ userId }: NotificationCenterProps) {
                     <Switch
                       checked={pref.calendar}
                       onCheckedChange={(checked) => updatePreference(pref.id, "calendar", checked)}
-                      size="sm"
                     />
                     <Label className="flex items-center text-sm">
                       <Calendar className="w-3 h-3 mr-1" />
@@ -238,9 +278,21 @@ export function NotificationCenter({ userId }: NotificationCenterProps) {
             </div>
           ))}
 
-          <div className="pt-4 border-t">
+          <div className="pt-4 border-t flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-1">
+                {isConnected ? (
+                  <Wifi className="w-4 h-4 text-green-600" />
+                ) : (
+                  <WifiOff className="w-4 h-4 text-red-600" />
+                )}
+                <span className={`text-xs ${isConnected ? "text-green-600" : "text-red-600"}`}>
+                  {isConnected ? "Connected" : "Disconnected"}
+                </span>
+              </div>
+            </div>
             <Button
-              onClick={() => sendTestNotification("bill_reminder")}
+              onClick={handleTestNotification}
               disabled={loading}
               variant="outline"
               size="sm"
@@ -259,18 +311,36 @@ export function NotificationCenter({ userId }: NotificationCenterProps) {
               <Bell className="w-5 h-5 mr-2 text-gray-600" />
               Recent Notifications
             </div>
-            <Badge variant="secondary">{recentNotifications.filter((n) => !n.read).length} unread</Badge>
+            <div className="flex items-center space-x-2">
+              <Badge variant="secondary">{allNotifications.filter((n) => !n.read).length} unread</Badge>
+              {allNotifications.length > 0 && (
+                <Button
+                  onClick={clearAllNotifications}
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2"
+                >
+                  <X className="w-3 h-3" />
+                </Button>
+              )}
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {recentNotifications.length === 0 ? (
+          {allNotifications.length === 0 ? (
             <p className="text-gray-500 text-center py-4">No notifications yet</p>
           ) : (
             <div className="space-y-3">
-              {recentNotifications.map((notification) => (
+              {allNotifications.map((notification) => (
                 <div
                   key={notification.id}
-                  className={`p-3 rounded-lg border ${notification.read ? "bg-gray-50" : "bg-blue-50 border-blue-200"}`}
+                  className={`p-3 rounded-lg border ${
+                    notification.read 
+                      ? "bg-gray-50" 
+                      : notification.priority === "high" 
+                        ? "bg-red-50 border-red-200" 
+                        : "bg-blue-50 border-blue-200"
+                  }`}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex items-start space-x-3">
@@ -278,9 +348,25 @@ export function NotificationCenter({ userId }: NotificationCenterProps) {
                         {getTypeIcon(notification.type)}
                       </div>
                       <div className="flex-1">
-                        <h4 className="font-medium text-sm">{notification.title}</h4>
+                        <div className="flex items-center space-x-2">
+                          <h4 className="font-medium text-sm">{notification.title}</h4>
+                          {notification.priority === "high" && (
+                            <Badge variant="destructive" className="text-xs">High</Badge>
+                          )}
+                          {notification.priority === "medium" && !notification.read && (
+                            <Badge variant="secondary" className="text-xs">Medium</Badge>
+                          )}
+                        </div>
                         <p className="text-sm text-gray-600 mt-1">{notification.message}</p>
-                        <p className="text-xs text-gray-500 mt-2">{notification.timestamp.toLocaleString()}</p>
+                        <div className="flex items-center justify-between mt-2">
+                          <p className="text-xs text-gray-500">{notification.timestamp.toLocaleString()}</p>
+                          {notification.actionUrl && (
+                            <Button variant="link" size="sm" className="h-auto p-0 text-xs">
+                              <Download className="w-3 h-3 mr-1" />
+                              View Details
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">

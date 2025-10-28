@@ -14,6 +14,12 @@ export interface EmailNotification {
     name: string
     email: string
   }
+  attachments?: Array<{
+    filename: string
+    content: string
+    encoding?: string
+    type?: string
+  }>
 }
 
 export interface SMSNotification {
@@ -56,7 +62,7 @@ export class SendPulseClient {
       if (data.access_token) {
         this.accessToken = data.access_token
         this.tokenExpiry = Date.now() + data.expires_in * 1000 - 60000 // Refresh 1 minute early
-        return this.accessToken
+        return this.accessToken as string
       }
 
       throw new Error("Failed to get access token")

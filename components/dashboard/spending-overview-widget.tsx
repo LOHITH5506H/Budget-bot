@@ -1,7 +1,7 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts"
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Legend } from "recharts"
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 
@@ -122,49 +122,78 @@ export function SpendingOverviewWidget({ userId }: SpendingOverviewWidgetProps) 
       <CardHeader>
         <CardTitle className="text-lg font-semibold text-gray-900">Spending Overview</CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <CardContent className="pb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Category Pie Chart */}
-          <div>
-            <h3 className="text-sm font-medium text-gray-700 mb-3">By Category</h3>
+          <div className="flex flex-col">
+            <h3 className="text-sm font-medium text-gray-700 mb-4">By Category</h3>
             {categoryData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <PieChart>
-                  <Pie
-                    data={categoryData}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="amount"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                  >
-                    {categoryData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value) => [`₹${value}`, "Amount"]} />
-                </PieChart>
-              </ResponsiveContainer>
+              <div className="space-y-4">
+                {/* Pie Chart */}
+                <div className="flex justify-center">
+                  <ResponsiveContainer width="100%" height={280}>
+                    <PieChart>
+                      <Pie
+                        data={categoryData}
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={100}
+                        fill="#8884d8"
+                        dataKey="amount"
+                      >
+                        {categoryData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color || COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value) => [`₹${value}`, "Amount"]} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                
+                {/* Custom Legend */}
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  {categoryData.map((entry, index) => {
+                    const total = categoryData.reduce((sum, item) => sum + item.amount, 0);
+                    const percentage = ((entry.amount / total) * 100).toFixed(0);
+                    return (
+                      <div key={entry.name} className="flex items-center space-x-2">
+                        <div 
+                          className="w-3 h-3 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: entry.color || COLORS[index % COLORS.length] }}
+                        />
+                        <span className="text-gray-700 truncate">
+                          {entry.name} {percentage}%
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             ) : (
-              <div className="h-48 flex items-center justify-center text-gray-500">No spending data this month</div>
+              <div className="h-80 flex items-center justify-center text-gray-500 border border-gray-200 rounded-lg">
+                No spending data this month
+              </div>
             )}
           </div>
 
           {/* Needs vs Wants Bar Chart */}
-          <div>
-            <h3 className="text-sm font-medium text-gray-700 mb-3">Needs vs Wants</h3>
+          <div className="flex flex-col">
+            <h3 className="text-sm font-medium text-gray-700 mb-4">Needs vs Wants</h3>
             {needWantData.some((d) => d.amount > 0) ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={needWantData}>
-                  <XAxis dataKey="type" />
-                  <YAxis />
-                  <Tooltip formatter={(value) => [`₹${value}`, "Amount"]} />
-                  <Bar dataKey="amount" fill="#10b981" />
-                </BarChart>
-              </ResponsiveContainer>
+              <div className="flex-1">
+                <ResponsiveContainer width="100%" height={350}>
+                  <BarChart data={needWantData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                    <XAxis dataKey="type" />
+                    <YAxis />
+                    <Tooltip formatter={(value) => [`₹${value}`, "Amount"]} />
+                    <Bar dataKey="amount" fill="#10b981" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             ) : (
-              <div className="h-48 flex items-center justify-center text-gray-500">No spending data this month</div>
+              <div className="h-80 flex items-center justify-center text-gray-500 border border-gray-200 rounded-lg">
+                No spending data this month
+              </div>
             )}
           </div>
         </div>

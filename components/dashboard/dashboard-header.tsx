@@ -14,6 +14,7 @@ import { TrendingUp, Settings, LogOut, User, CreditCard, Target, BarChart3 } fro
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
+import { useLoadingNavigation } from "@/hooks/use-loading-navigation"
 import Link from "next/link"
 
 interface DashboardHeaderProps {
@@ -24,6 +25,7 @@ interface DashboardHeaderProps {
 export function DashboardHeader({ user, profile }: DashboardHeaderProps) {
   const router = useRouter()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const { navigateWithLoading } = useLoadingNavigation()
 
   const handleSignOut = async () => {
     setIsLoggingOut(true)
@@ -54,27 +56,27 @@ export function DashboardHeader({ user, profile }: DashboardHeaderProps) {
 
           {/* Navigation */}
           <nav className="hidden md:flex items-center space-x-6">
-            <Link
-              href="/dashboard"
+            <button
+              onClick={() => navigateWithLoading("/dashboard")}
               className="text-gray-600 hover:text-gray-900 font-medium transition-colors flex items-center space-x-1"
             >
               <BarChart3 className="w-4 h-4" />
               <span>Dashboard</span>
-            </Link>
-            <Link
-              href="/subscriptions"
+            </button>
+            <button
+              onClick={() => navigateWithLoading("/subscriptions")}
               className="text-gray-600 hover:text-gray-900 font-medium transition-colors flex items-center space-x-1"
             >
               <CreditCard className="w-4 h-4" />
               <span>Subscriptions</span>
-            </Link>
-            <Link
-              href="/goals"
+            </button>
+            <button
+              onClick={() => navigateWithLoading("/goals")}
               className="text-gray-600 hover:text-gray-900 font-medium transition-colors flex items-center space-x-1"
             >
               <Target className="w-4 h-4" />
               <span>Goals</span>
-            </Link>
+            </button>
           </nav>
 
           {/* User Menu */}
@@ -96,12 +98,13 @@ export function DashboardHeader({ user, profile }: DashboardHeaderProps) {
                 <User className="mr-2 h-4 w-4" />
                 <span>Profile</span>
               </DropdownMenuItem>
-              <Link href="/settings">
-                <DropdownMenuItem className="cursor-pointer">
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Settings</span>
-                </DropdownMenuItem>
-              </Link>
+              <DropdownMenuItem 
+                className="cursor-pointer"
+                onClick={() => navigateWithLoading("/settings")}
+              >
+                <Settings className="mr-2 h-4 w-4" />
+                <span>Settings</span>
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem 
                 className="cursor-pointer text-red-600" 

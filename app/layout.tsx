@@ -1,9 +1,8 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
+import { LoadingProvider } from '@/contexts/loading-context'; // Import the provider
 
-// Initialize the Inter font from Google Fonts. This is a robust way to handle
-// fonts in Next.js and avoids issues with local file paths in build environments.
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
@@ -17,13 +16,12 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Switched from the local Geist font to Google Fonts (Inter) to resolve build errors.
-  // This approach is more compatible with standard deployment platforms.
-  // Also, temporarily removed Vercel Analytics as it was contributing to the build failure.
   return (
     <html lang="en">
       <body className={inter.className}>
-        {children}
+        <LoadingProvider> {/* Wrap children with the provider */}
+          {children}
+        </LoadingProvider>
       </body>
     </html>
   );

@@ -1,197 +1,265 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import React, { useState, forwardRef, useEffect } from "react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { createClient } from "@/lib/supabase/client"
-import { Plus, Calendar, CalendarPlus, Bell } from "lucide-react"
+import { Plus, Calendar, CalendarPlus, Bell, Search, Image, ExternalLink } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { useLoading } from "@/contexts/loading-context";
+import { useToast } from "@/hooks/use-toast"
 
 interface SubscriptionCreationDialogProps {
   userId: string
   trigger?: React.ReactNode
 }
 
-export function SubscriptionCreationDialog({ userId, trigger }: SubscriptionCreationDialogProps) {
-  const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [formData, setFormData] = useState({
-    name: "",
-    amount: "",
-    billing_cycle: "monthly",
-    next_due_date: "",
-    sync_to_calendar: true,
-    email_notifications: true,
-  })
-  const router = useRouter()
+export const SubscriptionCreationDialog = forwardRef<HTMLButtonElement, SubscriptionCreationDialogProps>(
+  ({ userId, trigger }, ref) => {
+    const [open, setOpen] = useState(false)
+    const { showLoading, hideLoading } = useLoading();
+    const [isSubmitting, setIsSubmitting] = useState(false); // Local state
+    const { toast } = useToast(); // Initialize toast
+    const [formData, setFormData] = useState({
+        name: "", amount: "", billing_cycle: "monthly",
+        next_due_date: "", sync_to_calendar: true, email_notifications: true,
+        logo_url: "", company_domain: ""
+    })
+    const [logoSuggestions, setLogoSuggestions] = useState<Array<{domain: string, logo: string}>>([])
+    const [isSearchingLogos, setIsSearchingLogos] = useState(false)
+    const [selectedLogo, setSelectedLogo] = useState<string>("")
+    const router = useRouter()
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-
-    try {
-      const supabase = createClient()
-
-      const nextDueDate = new Date(formData.next_due_date)
-      const dueDate = nextDueDate.getDate() // Get day of month (1-31)
-
-      const { error } = await supabase.from("subscriptions").insert({
-        user_id: userId,
-        name: formData.name,
-        amount: Number.parseFloat(formData.amount),
-        billing_cycle: formData.billing_cycle,
-        next_due_date: formData.next_due_date,
-        due_date: dueDate, // Add the required due_date field
-        is_active: true,
-      })
-
-      if (error) throw error
-
-      if (formData.sync_to_calendar) {
-        try {
-          await fetch("/api/calendar/sync", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              type: "bill_reminder",
-              data: {
-                name: formData.name,
-                amount: Number.parseFloat(formData.amount),
-                dueDate: formData.next_due_date,
-                description: `${formData.billing_cycle} subscription - ${formData.name}`,
-              },
-            }),
-          })
-        } catch (calendarError) {
-          console.error("Calendar sync failed:", calendarError)
-          // Don't fail the entire operation if calendar sync fails
+    // Search for logos when service name changes
+    useEffect(() => {
+        const searchLogos = async () => {
+            if (formData.name.length >= 3) {
+                setIsSearchingLogos(true)
+                try {
+                    const response = await fetch('/api/logos/search', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ query: formData.name })
+                    })
+                    
+                    if (response.ok) {
+                        const data = await response.json()
+                        setLogoSuggestions(data.suggestions || [])
+                    }
+                } catch (error) {
+                    console.error('Error searching logos:', error)
+                } finally {
+                    setIsSearchingLogos(false)
+                }
+            } else {
+                setLogoSuggestions([])
+            }
         }
-      }
 
-      setOpen(false)
-      setFormData({
-        name: "",
-        amount: "",
-        billing_cycle: "monthly",
-        next_due_date: "",
-        sync_to_calendar: true,
-        email_notifications: true,
-      })
-      router.refresh()
-    } catch (error) {
-      console.error("Error creating subscription:", error)
-    } finally {
-      setLoading(false)
+        const debounceTimeout = setTimeout(searchLogos, 500)
+        return () => clearTimeout(debounceTimeout)
+    }, [formData.name])
+
+    const handleLogoSelect = (logo: {domain: string, logo: string}) => {
+        setSelectedLogo(logo.logo)
+        setFormData({
+            ...formData,
+            logo_url: logo.logo,
+            company_domain: logo.domain
+        })
     }
+
+    console.log("DIALOG (Subscription): Rendering, isSubmitting (local):", isSubmitting);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        console.log("%cDIALOG (Subscription): --- handleSubmit START ---", "color: green; font-weight: bold;");
+        setIsSubmitting(true);
+        showLoading();
+        console.log("DIALOG (Subscription): setIsSubmitting(true) and showLoading() CALLED");
+
+        let loadingHidden = false;
+        const ensureHideLoading = () => {
+            if (!loadingHidden) {
+                console.log("%cDIALOG (Subscription): Hiding loading (ensureHideLoading)", "color: orange; font-weight: bold;");
+                hideLoading();
+                loadingHidden = true;
+            }
+        };
+
+        try {
+            console.log("DIALOG (Subscription): Starting async operations...");
+            const supabase = createClient()
+
+            let nextDueDate: Date;
+            try {
+                 nextDueDate = new Date(formData.next_due_date);
+                 if (isNaN(nextDueDate.getTime())) throw new Error(); // Check if valid date
+            } catch {
+                 toast({ title: "Invalid Date", description: "Please enter a valid next due date.", variant: "destructive" });
+                 throw new Error("Invalid Next Due Date entered.");
+            }
+            const dueDate = nextDueDate.getDate(); // Get day of month (1-31)
+
+            const amountNum = Number.parseFloat(formData.amount);
+            if (isNaN(amountNum) || amountNum <= 0) {
+                 toast({ title: "Invalid Amount", description: "Please enter a valid positive amount.", variant: "destructive" });
+                 throw new Error("Invalid amount entered");
+            }
+
+            const { error } = await supabase.from("subscriptions").insert({
+                user_id: userId, name: formData.name, amount: amountNum,
+                billing_cycle: formData.billing_cycle, next_due_date: formData.next_due_date,
+                due_date: dueDate, is_active: true, logo_url: formData.logo_url || null,
+                company_domain: formData.company_domain || null,
+            });
+
+            if (error) {
+                console.error("DIALOG (Subscription): Supabase insert error:", error);
+                throw error;
+            }
+            console.log("DIALOG (Subscription): Supabase insert successful");
+
+            // Calendar sync logic (run in background)
+            if (formData.sync_to_calendar) {
+                 console.log("DIALOG (Subscription): Attempting calendar sync (background)...");
+                 fetch("/api/calendar/sync", {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        type: "bill_reminder",
+                        data: { name: formData.name, amount: amountNum, dueDate: formData.next_due_date, description: `${formData.billing_cycle} subscription - ${formData.name}`, },
+                    }),
+                 }).then(response => { if (!response.ok) console.error("DIALOG (Subscription): Calendar sync failed (async)."); })
+                   .catch(calendarError => console.error("Calendar sync failed (async):", calendarError));
+            }
+
+            console.log("DIALOG (Subscription): Async operations likely complete.");
+            // Actions on success
+            ensureHideLoading();
+            setIsSubmitting(false);
+            setOpen(false);
+            setFormData({ name: "", amount: "", billing_cycle: "monthly", next_due_date: "", sync_to_calendar: true, email_notifications: true, logo_url: "", company_domain: "" });
+            setLogoSuggestions([]);
+            setSelectedLogo("");
+            toast({ title: "Subscription Added!", description: `Subscription "${formData.name}" has been recorded.` });
+            router.refresh();
+            console.log("DIALOG (Subscription): Dialog closed, form reset, router refreshed.");
+
+        } catch (error) {
+            console.error("Error creating subscription in catch block:", error);
+            ensureHideLoading();
+            setIsSubmitting(false);
+            // Show specific error if it's not one of the validation ones
+            if (!(error instanceof Error && (error.message.includes("Invalid amount") || error.message.includes("Invalid Next Due Date")))) {
+               toast({ title: "Error Adding Subscription", description: error instanceof Error ? error.message : "An unknown error occurred.", variant: "destructive" });
+            }
+        } finally {
+             ensureHideLoading(); // Final safety check
+             if (isSubmitting) setIsSubmitting(false);
+             console.log("%cDIALOG (Subscription): --- handleSubmit END (Finally) ---", "color: green; font-weight: bold;");
+        }
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={(isOpen) => { if (!isSubmitting) setOpen(isOpen); }}>
+            <DialogTrigger asChild>
+                {trigger ? React.cloneElement(trigger as React.ReactElement, { ref }) : (
+                    <Button ref={ref} className="bg-emerald-600 hover:bg-emerald-700">
+                        <Plus className="w-4 h-4 mr-2" /> Add Subscription
+                    </Button>
+                )}
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md" onInteractOutside={(e) => { if(isSubmitting) e.preventDefault(); }} onEscapeKeyDown={(e) => { if(isSubmitting) e.preventDefault(); }}>
+                <DialogHeader>
+                    <DialogTitle className="flex items-center">
+                        <Calendar className="w-5 h-5 mr-2 text-emerald-600" /> Add New Subscription
+                    </DialogTitle>
+                    <DialogDescription>Enter the details of your recurring subscription or bill.</DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                        <Label htmlFor="sub-name">Service Name</Label>
+                        <Input 
+                            id="sub-name" 
+                            placeholder="e.g., Netflix, Spotify, Internet Bill" 
+                            value={formData.name} 
+                            onChange={(e) => setFormData({ ...formData, name: e.target.value })} 
+                            required 
+                            disabled={isSubmitting} 
+                        />
+                        
+                        {/* Logo Suggestions */}
+                        {(logoSuggestions.length > 0 || isSearchingLogos) && (
+                            <div className="mt-2 p-3 border rounded-md bg-gray-50">
+                                <Label className="text-sm font-medium flex items-center">
+                                    <Image className="w-4 h-4 mr-1" />
+                                    Service Logo
+                                    {isSearchingLogos && <Search className="w-3 h-3 ml-1 animate-spin" />}
+                                </Label>
+                                
+                                {isSearchingLogos ? (
+                                    <p className="text-xs text-gray-500 mt-1">Searching for logos...</p>
+                                ) : logoSuggestions.length > 0 ? (
+                                    <div className="mt-2 space-y-2">
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {logoSuggestions.slice(0, 6).map((suggestion, index) => (
+                                                <button
+                                                    key={index}
+                                                    type="button"
+                                                    onClick={() => handleLogoSelect(suggestion)}
+                                                    disabled={isSubmitting}
+                                                    className={`p-2 border rounded-md hover:border-emerald-500 transition-colors ${
+                                                        selectedLogo === suggestion.logo 
+                                                            ? 'border-emerald-500 bg-emerald-50' 
+                                                            : 'border-gray-200 bg-white'
+                                                    }`}
+                                                >
+                                                    <img 
+                                                        src={suggestion.logo} 
+                                                        alt={`${suggestion.domain} logo`}
+                                                        className="w-8 h-8 mx-auto object-contain"
+                                                        onError={(e) => {
+                                                            e.currentTarget.style.display = 'none'
+                                                        }}
+                                                    />
+                                                    <p className="text-xs text-gray-600 mt-1 truncate">
+                                                        {suggestion.domain}
+                                                    </p>
+                                                </button>
+                                            ))}
+                                        </div>
+                                        {selectedLogo && (
+                                            <div className="flex items-center space-x-2 text-xs text-emerald-600">
+                                                <Image className="w-3 h-3" />
+                                                <span>Logo selected!</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-gray-500 mt-1">No logos found for this service</p>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                    <div><Label htmlFor="sub-amount">Amount (₹)</Label><Input id="sub-amount" type="number" step="0.01" min="0.01" placeholder="199" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} required disabled={isSubmitting} /></div>
+                    <div><Label htmlFor="sub-billing_cycle">Billing Cycle</Label><Select value={formData.billing_cycle} onValueChange={(value) => setFormData({ ...formData, billing_cycle: value })} disabled={isSubmitting}><SelectTrigger id="sub-billing_cycle"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="monthly">Monthly</SelectItem><SelectItem value="yearly">Yearly</SelectItem><SelectItem value="weekly">Weekly</SelectItem></SelectContent></Select></div>
+                    <div><Label htmlFor="sub-next_due_date">Next Due Date</Label><Input id="sub-next_due_date" type="date" value={formData.next_due_date} onChange={(e) => setFormData({ ...formData, next_due_date: e.target.value })} required disabled={isSubmitting} /></div>
+                    <div className="space-y-3 pt-2 border-t">
+                        <div className="flex items-center space-x-2"><Checkbox id="sub-sync_to_calendar" checked={formData.sync_to_calendar} onCheckedChange={(checked) => setFormData({ ...formData, sync_to_calendar: checked as boolean })} disabled={isSubmitting} /><Label htmlFor="sub-sync_to_calendar" className={`flex items-center text-sm ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}><CalendarPlus className="w-4 h-4 mr-1 text-emerald-600" /> Sync to Google Calendar</Label></div>
+                        <div className="flex items-center space-x-2"><Checkbox id="sub-email_notifications" checked={formData.email_notifications} onCheckedChange={(checked) => setFormData({ ...formData, email_notifications: checked as boolean })} disabled={isSubmitting} /><Label htmlFor="sub-email_notifications" className={`flex items-center text-sm ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}><Bell className="w-4 h-4 mr-1 text-blue-600" /> Email reminders via SendPulse</Label></div>
+                    </div>
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isSubmitting}>Cancel</Button>
+                        <Button type="submit" disabled={isSubmitting}>Add Subscription</Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    )
   }
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger || (
-          <Button className="bg-emerald-600 hover:bg-emerald-700">
-            <Plus className="w-4 h-4 mr-2" />
-            Add Subscription
-          </Button>
-        )}
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center">
-            <Calendar className="w-5 h-5 mr-2 text-emerald-600" />
-            Add New Subscription
-          </DialogTitle>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <Label htmlFor="name">Service Name</Label>
-            <Input
-              id="name"
-              placeholder="e.g., Netflix, Spotify, Internet Bill"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              required
-            />
-          </div>
-          <div>
-            <Label htmlFor="amount">Amount (₹)</Label>
-            <Input
-              id="amount"
-              type="number"
-              placeholder="199"
-              value={formData.amount}
-              onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-              required
-            />
-          </div>
-          <div>
-            <Label htmlFor="billing_cycle">Billing Cycle</Label>
-            <Select
-              value={formData.billing_cycle}
-              onValueChange={(value) => setFormData({ ...formData, billing_cycle: value })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="monthly">Monthly</SelectItem>
-                <SelectItem value="yearly">Yearly</SelectItem>
-                <SelectItem value="weekly">Weekly</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label htmlFor="next_due_date">Next Due Date</Label>
-            <Input
-              id="next_due_date"
-              type="date"
-              value={formData.next_due_date}
-              onChange={(e) => setFormData({ ...formData, next_due_date: e.target.value })}
-              required
-            />
-          </div>
-
-          <div className="space-y-3 pt-2 border-t">
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="sync_to_calendar"
-                checked={formData.sync_to_calendar}
-                onCheckedChange={(checked) => setFormData({ ...formData, sync_to_calendar: checked as boolean })}
-              />
-              <Label htmlFor="sync_to_calendar" className="flex items-center text-sm">
-                <CalendarPlus className="w-4 h-4 mr-1 text-emerald-600" />
-                Sync to Google Calendar
-              </Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="email_notifications"
-                checked={formData.email_notifications}
-                onCheckedChange={(checked) => setFormData({ ...formData, email_notifications: checked as boolean })}
-              />
-              <Label htmlFor="email_notifications" className="flex items-center text-sm">
-                <Bell className="w-4 h-4 mr-1 text-blue-600" />
-                Email reminders via SendPulse
-              </Label>
-            </div>
-          </div>
-
-          <div className="flex justify-end space-x-2">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? "Adding..." : "Add Subscription"}
-            </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
-  )
-}
+);
+SubscriptionCreationDialog.displayName = "SubscriptionCreationDialog";

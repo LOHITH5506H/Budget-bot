@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button"
 import { CreditCard, Plus, Calendar } from "lucide-react"
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
-import Link from "next/link"
+import { SubscriptionCreationDialog } from "@/components/subscription-creation-dialog"
+import { useLoadingNavigation } from "@/hooks/use-loading-navigation"
 
 interface UpcomingSubscriptionsWidgetProps {
   userId: string
@@ -23,6 +24,7 @@ interface Subscription {
 export function UpcomingSubscriptionsWidget({ userId }: UpcomingSubscriptionsWidgetProps) {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
   const [loading, setLoading] = useState(true)
+  const { navigateWithLoading } = useLoadingNavigation()
 
   useEffect(() => {
     const fetchUpcomingSubscriptions = async () => {
@@ -84,11 +86,14 @@ export function UpcomingSubscriptionsWidget({ userId }: UpcomingSubscriptionsWid
             <CreditCard className="w-5 h-5 mr-2 text-purple-600" />
             Upcoming Bills
           </div>
-          <Link href="/subscriptions">
-            <Button variant="ghost" size="sm" className="text-purple-600 hover:text-purple-700">
-              <Plus className="w-4 h-4" />
-            </Button>
-          </Link>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="text-purple-600 hover:text-purple-700"
+            onClick={() => navigateWithLoading("/subscriptions")}
+          >
+            <Plus className="w-4 h-4" />
+          </Button>
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-0">
@@ -122,21 +127,27 @@ export function UpcomingSubscriptionsWidget({ userId }: UpcomingSubscriptionsWid
                 </div>
               )
             })}
-            <Link href="/subscriptions">
-              <Button variant="outline" size="sm" className="w-full mt-3 bg-transparent">
-                Manage Subscriptions
-              </Button>
-            </Link>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full mt-3 bg-transparent"
+              onClick={() => navigateWithLoading("/subscriptions")}
+            >
+              Manage Subscriptions
+            </Button>
           </div>
         ) : (
           <div className="text-center py-6">
             <Calendar className="w-12 h-12 text-purple-300 mx-auto mb-3" />
             <p className="text-sm text-gray-600 mb-3">No subscriptions tracked</p>
-            <Link href="/subscriptions">
-              <Button size="sm" className="bg-purple-600 hover:bg-purple-700">
-                Add Subscription
-              </Button>
-            </Link>
+            <SubscriptionCreationDialog
+              userId={userId}
+              trigger={
+                <Button size="sm" className="bg-purple-600 hover:bg-purple-700">
+                  Add Subscription
+                </Button>
+              }
+            />
           </div>
         )}
       </CardContent>
