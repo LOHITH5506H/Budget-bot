@@ -97,6 +97,31 @@ export function QuickExpenseWidget({ userId }: QuickExpenseWidgetProps) {
       }
 
       console.log("[v0] Expense added successfully");
+
+      // Send real-time notification to update dashboard
+      try {
+        await fetch('/api/notifications/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            type: 'expense_update',
+            title: '💰 Expense Added',
+            message: `₹${amountNum.toFixed(2)} expense recorded for ${description}`,
+            data: {
+              amount: amountNum,
+              description,
+              category_id: categoryId,
+              is_need: isNeed,
+              expense_date: new Date().toISOString().split("T")[0],
+            }
+          })
+        });
+        console.log("QUICK EXPENSE: Real-time notification sent");
+      } catch (notifyError) {
+        console.error("QUICK EXPENSE: Failed to send real-time notification:", notifyError);
+      }
+
       console.log("QUICK EXPENSE: Async operations complete.");
 
       // Actions on success
@@ -110,8 +135,19 @@ export function QuickExpenseWidget({ userId }: QuickExpenseWidgetProps) {
         description: `₹${amountNum.toFixed(2)} expense has been recorded.`,
       })
 
+      // Trigger dashboard refresh event for real-time updates
+      window.dispatchEvent(new CustomEvent('expense-added', { 
+        detail: { 
+          amount: amountNum, 
+          description, 
+          categoryId, 
+          isNeed,
+          userId 
+        } 
+      }));
+
       router.refresh(); // Refresh server components
-      console.log("QUICK EXPENSE: Form reset, toast shown, router refreshed.");
+      console.log("QUICK EXPENSE: Form reset, toast shown, router refreshed, real-time events dispatched.");
 
     } catch (error) {
       console.error("[v0] Failed to add expense:", error)

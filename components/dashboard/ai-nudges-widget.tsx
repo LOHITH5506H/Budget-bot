@@ -3,7 +3,8 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Lightbulb, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
+import { usePusherEvent } from "@/hooks/use-pusher"
 
 interface AiNudgesWidgetProps {
   userId: string
@@ -13,7 +14,7 @@ export function AiNudgesWidget({ userId }: AiNudgesWidgetProps) {
   const [nudge, setNudge] = useState<string>("")
   const [loading, setLoading] = useState(true)
 
-  const generateNudge = async () => {
+  const generateNudge = useCallback(async () => {
     setLoading(true)
 
     try {
@@ -37,11 +38,28 @@ export function AiNudgesWidget({ userId }: AiNudgesWidgetProps) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [userId])
 
   useEffect(() => {
     generateNudge()
-  }, [userId])
+  }, [generateNudge])
+
+  // Listen for real-time expense updates to refresh AI insights
+  usePusherEvent('expense-updated', (data) => {
+    console.log("[AIInsights] Received expense update, regenerating insights");
+    generateNudge();
+  }, [generateNudge]);
+
+  // Listen for custom expense events
+  useEffect(() => {
+    const handleExpenseAdded = () => {
+      console.log("[AIInsights] Expense added event received, regenerating insights");
+      generateNudge();
+    };
+
+    window.addEventListener('expense-added', handleExpenseAdded);
+    return () => window.removeEventListener('expense-added', handleExpenseAdded);
+  }, [generateNudge])
 
   return (
     <Card className="bg-gradient-to-br from-yellow-50 to-orange-50 border-yellow-200 hover:shadow-lg transition-shadow">

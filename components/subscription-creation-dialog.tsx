@@ -27,7 +27,7 @@ export const SubscriptionCreationDialog = forwardRef<HTMLButtonElement, Subscrip
     const [formData, setFormData] = useState({
         name: "", amount: "", billing_cycle: "monthly",
         next_due_date: "", sync_to_calendar: true, email_notifications: true,
-        logo_url: "", company_domain: ""
+        logo_url: ""
     })
     const [logoSuggestions, setLogoSuggestions] = useState<Array<{domain: string, logo: string}>>([])
     const [isSearchingLogos, setIsSearchingLogos] = useState(false)
@@ -65,12 +65,13 @@ export const SubscriptionCreationDialog = forwardRef<HTMLButtonElement, Subscrip
     }, [formData.name])
 
     const handleLogoSelect = (logo: {domain: string, logo: string}) => {
+        console.log("DIALOG (Subscription): Logo selected:", logo);
         setSelectedLogo(logo.logo)
         setFormData({
             ...formData,
-            logo_url: logo.logo,
-            company_domain: logo.domain
+            logo_url: logo.logo
         })
+        console.log("DIALOG (Subscription): Updated formData with logo_url:", logo.logo);
     }
 
     console.log("DIALOG (Subscription): Rendering, isSubmitting (local):", isSubmitting);
@@ -103,7 +104,6 @@ export const SubscriptionCreationDialog = forwardRef<HTMLButtonElement, Subscrip
                  toast({ title: "Invalid Date", description: "Please enter a valid next due date.", variant: "destructive" });
                  throw new Error("Invalid Next Due Date entered.");
             }
-            const dueDate = nextDueDate.getDate(); // Get day of month (1-31)
 
             const amountNum = Number.parseFloat(formData.amount);
             if (isNaN(amountNum) || amountNum <= 0) {
@@ -111,30 +111,41 @@ export const SubscriptionCreationDialog = forwardRef<HTMLButtonElement, Subscrip
                  throw new Error("Invalid amount entered");
             }
 
-            const { error } = await supabase.from("subscriptions").insert({
-                user_id: userId, name: formData.name, amount: amountNum,
-                billing_cycle: formData.billing_cycle, next_due_date: formData.next_due_date,
-                due_date: dueDate, is_active: true, logo_url: formData.logo_url || null,
-                company_domain: formData.company_domain || null,
-            });
+            // Insert subscription with core fields
+            const subscriptionData = {
+                user_id: userId, 
+                name: formData.name, 
+                amount: amountNum,
+                is_active: true, 
+                logo_url: formData.logo_url || null,
+            };
+
+            // Add optional fields that might exist in the schema
+            if (formData.billing_cycle) {
+                (subscriptionData as any).billing_cycle = formData.billing_cycle;
+            }
+            if (formData.next_due_date) {
+                (subscriptionData as any).next_due_date = formData.next_due_date;
+                // Also add due_date as day of month for legacy schema compatibility
+                const dayOfMonth = nextDueDate.getDate(); // Extract day (1-31)
+                (subscriptionData as any).due_date = dayOfMonth;
+            }
+
+            console.log("DIALOG (Subscription): Inserting data:", JSON.stringify(subscriptionData, null, 2));
+            
+            const { error } = await supabase.from("subscriptions").insert(subscriptionData);
 
             if (error) {
                 console.error("DIALOG (Subscription): Supabase insert error:", error);
+                console.error("DIALOG (Subscription): Error details:", JSON.stringify(error, null, 2));
                 throw error;
             }
-            console.log("DIALOG (Subscription): Supabase insert successful");
+            console.log("DIALOG (Subscription): Supabase insert successful!");
 
-            // Calendar sync logic (run in background)
+            // Calendar sync temporarily disabled due to Google API issues
             if (formData.sync_to_calendar) {
-                 console.log("DIALOG (Subscription): Attempting calendar sync (background)...");
-                 fetch("/api/calendar/sync", {
-                    method: "POST", headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        type: "bill_reminder",
-                        data: { name: formData.name, amount: amountNum, dueDate: formData.next_due_date, description: `${formData.billing_cycle} subscription - ${formData.name}`, },
-                    }),
-                 }).then(response => { if (!response.ok) console.error("DIALOG (Subscription): Calendar sync failed (async)."); })
-                   .catch(calendarError => console.error("Calendar sync failed (async):", calendarError));
+                 console.log("DIALOG (Subscription): Calendar sync temporarily disabled");
+                 // TODO: Re-enable after fixing Google Calendar API configuration
             }
 
             console.log("DIALOG (Subscription): Async operations likely complete.");
@@ -142,7 +153,7 @@ export const SubscriptionCreationDialog = forwardRef<HTMLButtonElement, Subscrip
             ensureHideLoading();
             setIsSubmitting(false);
             setOpen(false);
-            setFormData({ name: "", amount: "", billing_cycle: "monthly", next_due_date: "", sync_to_calendar: true, email_notifications: true, logo_url: "", company_domain: "" });
+            setFormData({ name: "", amount: "", billing_cycle: "monthly", next_due_date: "", sync_to_calendar: true, email_notifications: true, logo_url: "" });
             setLogoSuggestions([]);
             setSelectedLogo("");
             toast({ title: "Subscription Added!", description: `Subscription "${formData.name}" has been recorded.` });
@@ -151,11 +162,17 @@ export const SubscriptionCreationDialog = forwardRef<HTMLButtonElement, Subscrip
 
         } catch (error) {
             console.error("Error creating subscription in catch block:", error);
+            console.error("Error creating subscription - Full details:", JSON.stringify(error, null, 2));
+            console.error("Error type:", typeof error);
+            console.error("Error constructor:", error?.constructor?.name);
             ensureHideLoading();
             setIsSubmitting(false);
             // Show specific error if it's not one of the validation ones
             if (!(error instanceof Error && (error.message.includes("Invalid amount") || error.message.includes("Invalid Next Due Date")))) {
-               toast({ title: "Error Adding Subscription", description: error instanceof Error ? error.message : "An unknown error occurred.", variant: "destructive" });
+               const errorMessage = error && typeof error === 'object' && 'message' in error ? (error as any).message : 
+                                   error instanceof Error ? error.message : 
+                                   "An unknown error occurred.";
+               toast({ title: "Error Adding Subscription", description: errorMessage, variant: "destructive" });
             }
         } finally {
              ensureHideLoading(); // Final safety check

@@ -53,6 +53,11 @@ export async function POST(request: NextRequest) {
       };
 
       pushSuccess = await pusherService.sendNotificationToUser(user.id, notification);
+
+      // Also trigger dashboard refresh for expense-related updates
+      if (type === 'expense_update' || type === 'goal_update' || type === 'subscription_update') {
+        await pusherService.sendDashboardRefresh(user.id);
+      }
     }
 
     // Send email notification if recipients specified or for specific types

@@ -3,8 +3,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Flame, Snowflake } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { usePusherEvent } from "@/hooks/use-pusher"
 
 interface StreakWidgetProps {
   userId: string
@@ -21,8 +22,7 @@ export function StreakWidget({ userId }: StreakWidgetProps) {
   const [streakData, setStreakData] = useState<StreakData | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    const fetchStreakData = async () => {
+  const fetchStreakData = useCallback(async () => {
       const supabase = createClient()
       const { data, error } = await supabase.from("streaks").select("*").eq("user_id", userId).single()
 
@@ -30,10 +30,28 @@ export function StreakWidget({ userId }: StreakWidgetProps) {
         setStreakData(data)
       }
       setLoading(false)
-    }
+    }, [userId])
 
-    fetchStreakData()
-  }, [userId])
+    useEffect(() => {
+      fetchStreakData()
+    }, [fetchStreakData])
+
+    // Listen for expense updates to update streak
+    usePusherEvent('expense-updated', (data) => {
+      console.log("[Streak] Received expense update, refreshing streak");
+      fetchStreakData();
+    }, [fetchStreakData]);
+
+    // Listen for custom expense events
+    useEffect(() => {
+      const handleExpenseAdded = () => {
+        console.log("[Streak] Expense added event received, refreshing streak");
+        fetchStreakData();
+      };
+
+      window.addEventListener('expense-added', handleExpenseAdded);
+      return () => window.removeEventListener('expense-added', handleExpenseAdded);
+    }, [fetchStreakData])
 
   if (loading) {
     return (

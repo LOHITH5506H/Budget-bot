@@ -1,8 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { withGeminiRateLimit, createRateLimitMiddleware, rateLimiters } from "@/lib/rate-limiter"
 
 export async function POST(request: NextRequest) {
   try {
+    // Check rate limit
+    const rateLimitResponse = await createRateLimitMiddleware(rateLimiters.gemini)(request)
+    if (rateLimitResponse) {
+      return rateLimitResponse
+    }
+
     const { userId } = await request.json()
 
     if (!userId) {
@@ -66,7 +73,7 @@ export async function POST(request: NextRequest) {
       wantPercentage,
       transactionCount: expenses.length,
       topCategories: expenses.reduce((acc: any, exp) => {
-        const category = exp.categories?.name || "Other"
+        const category = (exp.categories as any)?.name || "Other"
         acc[category] = (acc[category] || 0) + Number.parseFloat(exp.amount)
         return acc
       }, {}),
@@ -87,47 +94,49 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ insight: randomInsight })
     }
 
-    // Call Gemini API for personalized insights
+    // Call Gemini API for personalized insights with rate limiting
     console.log("[v0] Making Gemini API request...")
 
-    const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: `As a personal finance advisor, provide a brief, actionable insight (max 2 sentences) based on this spending data:
+    const geminiResponse = await withGeminiRateLimit(async () => {
+      return fetch(
+        `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  {
+                    text: `As a personal finance advisor, provide a brief, actionable insight (max 2 sentences) based on this spending data:
 
 Total spent this month: ₹${totalSpent}
 Needs: ₹${needSpending} (${((needSpending / totalSpent) * 100).toFixed(0)}%)
 Wants: ₹${wantSpending} (${wantPercentage.toFixed(0)}%)
 Transactions: ${expenses.length}
 Top spending categories: ${Object.entries(spendingContext.topCategories)
-                    .slice(0, 3)
-                    .map(([cat, amt]) => `${cat}: ₹${amt}`)
-                    .join(", ")}
+                      .slice(0, 3)
+                      .map(([cat, amt]) => `${cat}: ₹${amt}`)
+                      .join(", ")}
 Active savings goals: ${goals?.length || 0}
 
 Give specific, actionable advice to improve their financial habits. Use Indian Rupee (₹) format. Be encouraging but practical.`,
-                },
-              ],
+                  },
+                ],
+              },
+            ],
+            generationConfig: {
+              temperature: 0.7,
+              topK: 40,
+              topP: 0.95,
+              maxOutputTokens: 200,
             },
-          ],
-          generationConfig: {
-            temperature: 0.7,
-            topK: 40,
-            topP: 0.95,
-            maxOutputTokens: 200,
-          },
-        }),
-      },
-    )
+          }),
+        },
+      )
+    })
 
     console.log("[v0] Gemini API response status:", geminiResponse.status)
 

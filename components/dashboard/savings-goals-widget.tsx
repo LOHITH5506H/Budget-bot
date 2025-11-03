@@ -4,10 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Target, Plus } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { GoalCreationDialog } from "@/components/goal-creation-dialog"
 import { useLoadingNavigation } from "@/hooks/use-loading-navigation"
+import { usePusherEvent } from "@/hooks/use-pusher"
 
 interface SavingsGoalsWidgetProps {
   userId: string
@@ -26,8 +27,7 @@ export function SavingsGoalsWidget({ userId }: SavingsGoalsWidgetProps) {
   const [loading, setLoading] = useState(true)
   const { navigateWithLoading } = useLoadingNavigation()
 
-  useEffect(() => {
-    const fetchGoals = async () => {
+  const fetchGoals = useCallback(async () => {
       const supabase = createClient()
       const { data } = await supabase
         .from("savings_goals")
@@ -41,10 +41,34 @@ export function SavingsGoalsWidget({ userId }: SavingsGoalsWidgetProps) {
         setGoals(data)
       }
       setLoading(false)
-    }
+    }, [userId])
 
-    fetchGoals()
-  }, [userId])
+    useEffect(() => {
+      fetchGoals()
+    }, [fetchGoals])
+
+    // Listen for real-time goal updates
+    usePusherEvent('goal-updated', (data) => {
+      console.log("[SavingsGoals] Received goal update:", data);
+      fetchGoals();
+    }, [fetchGoals]);
+
+    // Listen for expense updates (goals might be affected by spending changes)
+    usePusherEvent('expense-updated', (data) => {
+      console.log("[SavingsGoals] Expense updated, refreshing goals");
+      fetchGoals();
+    }, [fetchGoals]);
+
+    // Listen for custom events
+    useEffect(() => {
+      const handleExpenseAdded = () => {
+        console.log("[SavingsGoals] Expense added event received, refreshing goals");
+        fetchGoals();
+      };
+
+      window.addEventListener('expense-added', handleExpenseAdded);
+      return () => window.removeEventListener('expense-added', handleExpenseAdded);
+    }, [fetchGoals])
 
   if (loading) {
     return (

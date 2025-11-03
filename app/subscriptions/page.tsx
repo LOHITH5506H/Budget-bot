@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Calendar, IndianRupee } from "lucide-react"
 import Link from "next/link"
 import { SubscriptionCreationDialog } from "@/components/subscription-creation-dialog"
+import { SubscriptionLogo } from "@/components/subscription-logo"
 
 export default async function SubscriptionsPage() {
   const supabase = await createClient()
@@ -19,12 +20,24 @@ export default async function SubscriptionsPage() {
   }
 
   // Fetch subscriptions
-  const { data: subscriptions } = await supabase
+  const { data: subscriptions, error: fetchError } = await supabase
     .from("subscriptions")
-    .select("*")
+    .select("id, name, amount, billing_cycle, next_due_date, is_active, logo_url")
     .eq("user_id", user.id)
     .eq("is_active", true)
     .order("next_due_date")
+
+  // Debug logging
+  console.log("Subscriptions fetch result:", { subscriptions, fetchError })
+  if (subscriptions) {
+    subscriptions.forEach((sub, index) => {
+      console.log(`Subscription ${index + 1}:`, {
+        name: sub.name,
+        logo_url: sub.logo_url,
+        has_logo: !!sub.logo_url
+      })
+    })
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -64,12 +77,13 @@ export default async function SubscriptionsPage() {
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-4">
-                        <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center">
-                          <Calendar className="w-6 h-6 text-emerald-600" />
-                        </div>
+                        <SubscriptionLogo 
+                          logoUrl={subscription.logo_url} 
+                          subscriptionName={subscription.name} 
+                        />
                         <div>
                           <h3 className="font-semibold text-gray-900">{subscription.name}</h3>
-                          <p className="text-sm text-gray-600 capitalize">{subscription.billing_cycle}</p>
+                          <p className="text-sm text-gray-600 capitalize">{subscription.billing_cycle || 'monthly'}</p>
                         </div>
                       </div>
                       <div className="text-right">

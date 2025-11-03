@@ -2,8 +2,9 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Legend } from "recharts"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { usePusherEvent } from "@/hooks/use-pusher"
 
 interface SpendingOverviewWidgetProps {
   userId: string
@@ -25,8 +26,7 @@ export function SpendingOverviewWidget({ userId }: SpendingOverviewWidgetProps) 
   const [needWantData, setNeedWantData] = useState<NeedWantData[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    const fetchSpendingData = async () => {
+  const fetchSpendingData = useCallback(async () => {
       console.log("[v0] Fetching spending data for user:", userId)
       const supabase = createClient()
 
@@ -97,10 +97,28 @@ export function SpendingOverviewWidget({ userId }: SpendingOverviewWidgetProps) 
       }
 
       setLoading(false)
-    }
+    }, [userId])
 
-    fetchSpendingData()
-  }, [userId])
+    useEffect(() => {
+      fetchSpendingData()
+    }, [fetchSpendingData])
+
+    // Listen for real-time expense updates
+    usePusherEvent('expense-updated', (data) => {
+      console.log("[SpendingOverview] Received expense update:", data);
+      fetchSpendingData();
+    }, [fetchSpendingData]);
+
+    // Also listen for custom events from the expense widget
+    useEffect(() => {
+      const handleExpenseAdded = () => {
+        console.log("[SpendingOverview] Expense added event received, refreshing data");
+        fetchSpendingData();
+      };
+
+      window.addEventListener('expense-added', handleExpenseAdded);
+      return () => window.removeEventListener('expense-added', handleExpenseAdded);
+    }, [fetchSpendingData])
 
   if (loading) {
     return (
