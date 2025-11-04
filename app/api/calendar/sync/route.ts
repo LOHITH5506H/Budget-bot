@@ -5,10 +5,20 @@ import { createBillReminderEvent, createGoalMilestoneEvent } from "@/lib/google-
 
 export async function POST(request: NextRequest) {
   try {
+    // Check if Google Calendar is properly configured
+    if (!process.env.GOOGLE_PRIVATE_KEY || !process.env.GOOGLE_CLIENT_EMAIL) {
+      console.warn('Google Calendar not configured - skipping calendar sync');
+      return NextResponse.json({ 
+        success: false, 
+        error: "Calendar sync is not configured",
+        message: "Google Calendar credentials are missing"
+      }, { status: 200 }); // Return 200 to avoid breaking the flow
+    }
+
     const { type, data } = await request.json()
 
     // Initialize Supabase client
-    const cookieStore = cookies()
+    const cookieStore = await cookies()
     const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
       cookies: {
         get(name: string) {
@@ -25,10 +35,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Get user's calendar ID from profile or use default
-    const { data: profile } = await supabase.from("profiles").select("google_calendar_id").eq("id", user.id).single()
-
-    const calendarId = profile?.google_calendar_id || process.env.GOOGLE_CALENDAR_ID || "primary"
+    // Use the logged-in user's email as their calendar ID
+    // This syncs events to their personal Google Calendar
+    const calendarId = user.email || "primary"
+    
+    console.log(`📅 Syncing calendar event for user: ${user.email} (Calendar ID: ${calendarId})`)
 
     let eventId: string | null = null
 
@@ -60,10 +71,21 @@ export async function POST(request: NextRequest) {
     if (eventId) {
       return NextResponse.json({ success: true, eventId })
     } else {
-      return NextResponse.json({ error: "Failed to create calendar event" }, { status: 500 })
+      return NextResponse.json({ 
+        success: false, 
+        error: "Failed to create calendar event",
+        message: "Calendar event creation returned null"
+      }, { status: 200 }) // Return 200 to avoid breaking the flow
     }
   } catch (error) {
     console.error("Calendar sync error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    
+    // Return a soft error (200 status) so it doesn't break the user flow
+    return NextResponse.json({ 
+      success: false,
+      error: "Calendar sync failed",
+      message: error instanceof Error ? error.message : "Unknown error",
+      details: process.env.NODE_ENV === 'development' ? error : undefined
+    }, { status: 200 })
   }
 }

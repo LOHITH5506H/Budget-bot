@@ -142,11 +142,73 @@ export const SubscriptionCreationDialog = forwardRef<HTMLButtonElement, Subscrip
             }
             console.log("DIALOG (Subscription): Supabase insert successful!");
 
-            // Calendar sync temporarily disabled due to Google API issues
-            if (formData.sync_to_calendar) {
-                 console.log("DIALOG (Subscription): Calendar sync temporarily disabled");
-                 // TODO: Re-enable after fixing Google Calendar API configuration
+            // Send notifications in parallel (don't wait for them to prevent blocking)
+            const notificationPromises = [];
+
+            // 1. Send Pusher real-time notification
+            notificationPromises.push(
+                fetch('/api/notifications/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: userId,
+                        type: 'subscription_update',
+                        title: 'Subscription Added',
+                        message: `${formData.name} subscription has been added successfully!`,
+                        data: {
+                            subscriptionName: formData.name,
+                            amount: amountNum,
+                            billing_cycle: formData.billing_cycle,
+                            next_due_date: formData.next_due_date
+                        }
+                    })
+                }).catch(err => console.error('DIALOG (Subscription): Pusher notification failed:', err))
+            );
+
+            // 2. Send email notification if enabled
+            if (formData.email_notifications) {
+                notificationPromises.push(
+                    fetch('/api/notifications/send', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            userId: userId,
+                            type: 'bill_reminder',
+                            data: {
+                                billName: formData.name,
+                                subscriptionName: formData.name,
+                                amount: amountNum,
+                                dueDate: formData.next_due_date
+                            }
+                        })
+                    }).catch(err => console.error('DIALOG (Subscription): Email notification failed:', err))
+                );
             }
+
+            // 3. Sync to Google Calendar if enabled
+            if (formData.sync_to_calendar && formData.next_due_date) {
+                console.log("DIALOG (Subscription): Attempting calendar sync...");
+                notificationPromises.push(
+                    fetch('/api/calendar/sync', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            type: 'bill_reminder',
+                            data: {
+                                name: formData.name,
+                                dueDate: formData.next_due_date,
+                                amount: amountNum,
+                                description: `${formData.billing_cycle} subscription`
+                            }
+                        })
+                    }).catch(err => console.error('DIALOG (Subscription): Calendar sync failed:', err))
+                );
+            }
+
+            // Execute all notifications in parallel without waiting
+            Promise.all(notificationPromises).then(() => {
+                console.log('DIALOG (Subscription): All notifications processed');
+            });
 
             console.log("DIALOG (Subscription): Async operations likely complete.");
             // Actions on success

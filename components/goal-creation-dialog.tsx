@@ -70,13 +70,72 @@ export const GoalCreationDialog = forwardRef<HTMLButtonElement, GoalCreationDial
         }
         console.log("DIALOG (Goal): Supabase insert successful");
 
-        // Calendar sync logic (run in background)
-        if (formData.sync_to_calendar && formData.target_date) {
-            console.log("DIALOG (Goal): Attempting calendar sync (background)...");
-            fetch("/api/calendar/sync", { /* ... fetch options ... */ })
-                .then(response => { if (!response.ok) console.error("DIALOG (Goal): Calendar sync failed (async)."); })
-                .catch(calendarError => console.error("Calendar sync failed (async):", calendarError));
+        // Send notifications in parallel (don't wait for them to prevent blocking)
+        const notificationPromises = [];
+
+        // 1. Send Pusher real-time notification
+        notificationPromises.push(
+            fetch('/api/notifications/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: userId,
+                    type: 'goal_update',
+                    title: 'Goal Created',
+                    message: `${formData.name} goal has been created successfully!`,
+                    data: {
+                        goalName: formData.name,
+                        targetAmount: targetAmountNum,
+                        currentAmount: 0,
+                        targetDate: formData.target_date
+                    }
+                })
+            }).catch(err => console.error('DIALOG (Goal): Pusher notification failed:', err))
+        );
+
+        // 2. Send email notification if enabled
+        if (formData.milestone_notifications) {
+            notificationPromises.push(
+                fetch('/api/notifications/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        userId: userId,
+                        type: 'goal_milestone',
+                        data: {
+                            goalName: formData.name,
+                            currentAmount: 0,
+                            targetAmount: targetAmountNum
+                        }
+                    })
+                }).catch(err => console.error('DIALOG (Goal): Email notification failed:', err))
+            );
         }
+
+        // 3. Sync to Google Calendar if enabled
+        if (formData.sync_to_calendar && formData.target_date) {
+            console.log("DIALOG (Goal): Attempting calendar sync...");
+            notificationPromises.push(
+                fetch('/api/calendar/sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'goal_milestone',
+                        data: {
+                            name: formData.name,
+                            targetDate: formData.target_date,
+                            targetAmount: targetAmountNum,
+                            currentAmount: 0
+                        }
+                    })
+                }).catch(err => console.error('DIALOG (Goal): Calendar sync failed:', err))
+            );
+        }
+
+        // Execute all notifications in parallel without waiting
+        Promise.all(notificationPromises).then(() => {
+            console.log('DIALOG (Goal): All notifications processed');
+        });
 
         console.log("DIALOG (Goal): Async operations likely complete.");
         // Success actions
