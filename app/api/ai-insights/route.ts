@@ -2,6 +2,10 @@ import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { withGeminiRateLimit, createRateLimitMiddleware, rateLimiters } from "@/lib/rate-limiter"
 
+// Simple in-memory cache for AI insights (resets on server restart)
+const insightCache = new Map<string, { insight: string, timestamp: number }>()
+const CACHE_DURATION = 1000 * 60 * 30 // 30 minutes cache
+
 export async function POST(request: NextRequest) {
   try {
     // Check rate limit
@@ -14,6 +18,15 @@ export async function POST(request: NextRequest) {
 
     if (!userId) {
       return NextResponse.json({ error: "User ID is required" }, { status: 400 })
+    }
+
+    // Check cache first - one insight per user per day
+    const cacheKey = `${userId}-${new Date().toDateString()}`
+    const cached = insightCache.get(cacheKey)
+    
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      console.log("[v0] Returning cached AI insight (age:", Math.round((Date.now() - cached.timestamp) / 1000 / 60), "minutes)")
+      return NextResponse.json({ insight: cached.insight, cached: true })
     }
 
     const supabase = await createClient()
@@ -154,6 +167,11 @@ Give specific, actionable advice to improve their financial habits. Use Indian R
       `You've spent ₹${totalSpent.toLocaleString()} this month with ${wantPercentage.toFixed(0)}% on wants. Consider reducing want spending to boost your savings!`
 
     console.log("[v0] Generated insight:", insight)
+    
+    // Cache the result for 30 minutes
+    insightCache.set(cacheKey, { insight, timestamp: Date.now() })
+    console.log("[v0] Cached AI insight for key:", cacheKey)
+    
     return NextResponse.json({ insight })
   } catch (error) {
     console.error("AI Insights API error:", error)

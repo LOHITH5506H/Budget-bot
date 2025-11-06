@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { TrendingUp, ArrowLeft } from "lucide-react";
+import { TrendingUp, ArrowLeft, Chrome } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLoading } from "@/contexts/loading-context";
@@ -91,6 +91,23 @@ export default function SignUpPage() {
     }
   };
 
+  const handleGoogleSignup = async () => {
+    try {
+      const supabase = createClient();
+      const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}/dashboard` : undefined;
+      await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          scopes: 'https://www.googleapis.com/auth/calendar.events',
+          redirectTo,
+        },
+      });
+      // Browser will redirect
+    } catch (err) {
+      console.error('Google signup failed:', err);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-blue-50 flex items-center justify-center p-6">
       <div className="w-full max-w-md">
@@ -139,6 +156,17 @@ export default function SignUpPage() {
                 disabled={isSubmitting} // Use local isSubmitting
               >
                  Create Account
+              </Button>
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-white px-2 text-gray-500">or</span>
+                </div>
+              </div>
+              <Button type="button" variant="outline" className="w-full h-11" onClick={handleGoogleSignup} disabled={isSubmitting}>
+                <Chrome className="w-4 h-4 mr-2" /> Continue with Google
               </Button>
             </form>
             <div className="mt-6 text-center text-sm text-gray-600">

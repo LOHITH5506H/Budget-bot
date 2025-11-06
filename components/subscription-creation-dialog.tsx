@@ -12,6 +12,7 @@ import { Plus, Calendar, CalendarPlus, Bell, Search, Image, ExternalLink } from 
 import { useRouter } from "next/navigation"
 import { useLoading } from "@/contexts/loading-context";
 import { useToast } from "@/hooks/use-toast"
+import { createSubscriptionCalendarUrl, openCalendarInNewTab } from "@/lib/add-to-calendar"
 
 interface SubscriptionCreationDialogProps {
   userId: string
@@ -26,7 +27,7 @@ export const SubscriptionCreationDialog = forwardRef<HTMLButtonElement, Subscrip
     const { toast } = useToast(); // Initialize toast
     const [formData, setFormData] = useState({
         name: "", amount: "", billing_cycle: "monthly",
-        next_due_date: "", sync_to_calendar: true, email_notifications: true,
+        next_due_date: "", add_to_calendar: false, email_notifications: true,
         logo_url: ""
     })
     const [logoSuggestions, setLogoSuggestions] = useState<Array<{domain: string, logo: string}>>([])
@@ -185,42 +186,43 @@ export const SubscriptionCreationDialog = forwardRef<HTMLButtonElement, Subscrip
                 );
             }
 
-            // 3. Sync to Google Calendar if enabled
-            if (formData.sync_to_calendar && formData.next_due_date) {
-                console.log("DIALOG (Subscription): Attempting calendar sync...");
-                notificationPromises.push(
-                    fetch('/api/calendar/sync', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            type: 'bill_reminder',
-                            data: {
-                                name: formData.name,
-                                dueDate: formData.next_due_date,
-                                amount: amountNum,
-                                description: `${formData.billing_cycle} subscription`
-                            }
-                        })
-                    }).catch(err => console.error('DIALOG (Subscription): Calendar sync failed:', err))
-                );
-            }
-
             // Execute all notifications in parallel without waiting
             Promise.all(notificationPromises).then(() => {
                 console.log('DIALOG (Subscription): All notifications processed');
             });
 
             console.log("DIALOG (Subscription): Async operations likely complete.");
+            
+            // Prepare calendar data before closing dialog
+            const calendarData = {
+                name: formData.name,
+                amount: amountNum,
+                dueDate: nextDueDate,
+                billingCycle: formData.billing_cycle
+            };
+            const shouldAddToCalendar = formData.add_to_calendar && formData.next_due_date;
+            
             // Actions on success
             ensureHideLoading();
             setIsSubmitting(false);
             setOpen(false);
-            setFormData({ name: "", amount: "", billing_cycle: "monthly", next_due_date: "", sync_to_calendar: true, email_notifications: true, logo_url: "" });
+            setFormData({ name: "", amount: "", billing_cycle: "monthly", next_due_date: "", add_to_calendar: false, email_notifications: true, logo_url: "" });
             setLogoSuggestions([]);
             setSelectedLogo("");
             toast({ title: "Subscription Added!", description: `Subscription "${formData.name}" has been recorded.` });
             router.refresh();
             console.log("DIALOG (Subscription): Dialog closed, form reset, router refreshed.");
+            
+            // Open calendar in new tab after dialog closes
+            if (shouldAddToCalendar) {
+                const calendarUrl = createSubscriptionCalendarUrl(
+                    calendarData.name,
+                    calendarData.amount,
+                    calendarData.dueDate,
+                    calendarData.billingCycle
+                );
+                openCalendarInNewTab(calendarUrl);
+            }
 
         } catch (error) {
             console.error("Error creating subscription in catch block:", error);
@@ -328,7 +330,7 @@ export const SubscriptionCreationDialog = forwardRef<HTMLButtonElement, Subscrip
                     <div><Label htmlFor="sub-billing_cycle">Billing Cycle</Label><Select value={formData.billing_cycle} onValueChange={(value) => setFormData({ ...formData, billing_cycle: value })} disabled={isSubmitting}><SelectTrigger id="sub-billing_cycle"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="monthly">Monthly</SelectItem><SelectItem value="yearly">Yearly</SelectItem><SelectItem value="weekly">Weekly</SelectItem></SelectContent></Select></div>
                     <div><Label htmlFor="sub-next_due_date">Next Due Date</Label><Input id="sub-next_due_date" type="date" value={formData.next_due_date} onChange={(e) => setFormData({ ...formData, next_due_date: e.target.value })} required disabled={isSubmitting} /></div>
                     <div className="space-y-3 pt-2 border-t">
-                        <div className="flex items-center space-x-2"><Checkbox id="sub-sync_to_calendar" checked={formData.sync_to_calendar} onCheckedChange={(checked) => setFormData({ ...formData, sync_to_calendar: checked as boolean })} disabled={isSubmitting} /><Label htmlFor="sub-sync_to_calendar" className={`flex items-center text-sm ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}><CalendarPlus className="w-4 h-4 mr-1 text-emerald-600" /> Sync to Google Calendar</Label></div>
+                        <div className="flex items-center space-x-2"><Checkbox id="sub-add_to_calendar" checked={formData.add_to_calendar} onCheckedChange={(checked) => setFormData({ ...formData, add_to_calendar: checked as boolean })} disabled={isSubmitting} /><Label htmlFor="sub-add_to_calendar" className={`flex items-center text-sm ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}><CalendarPlus className="w-4 h-4 mr-1 text-emerald-600" /> Add to Google Calendar</Label></div>
                         <div className="flex items-center space-x-2"><Checkbox id="sub-email_notifications" checked={formData.email_notifications} onCheckedChange={(checked) => setFormData({ ...formData, email_notifications: checked as boolean })} disabled={isSubmitting} /><Label htmlFor="sub-email_notifications" className={`flex items-center text-sm ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}><Bell className="w-4 h-4 mr-1 text-blue-600" /> Email reminders via SendPulse</Label></div>
                     </div>
                     <DialogFooter>

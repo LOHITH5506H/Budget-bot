@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Legend } from "recharts"
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { usePusherEvent } from "@/hooks/use-pusher"
 
@@ -25,6 +25,7 @@ export function SpendingOverviewWidget({ userId }: SpendingOverviewWidgetProps) 
   const [categoryData, setCategoryData] = useState<CategorySpending[]>([])
   const [needWantData, setNeedWantData] = useState<NeedWantData[]>([])
   const [loading, setLoading] = useState(true)
+  const hasLoadedInitialDataRef = useRef(false) // Prevent initial duplicate fetches
 
   const fetchSpendingData = useCallback(async () => {
       console.log("[v0] Fetching spending data for user:", userId)
@@ -100,7 +101,11 @@ export function SpendingOverviewWidget({ userId }: SpendingOverviewWidgetProps) 
     }, [userId])
 
     useEffect(() => {
-      fetchSpendingData()
+      // Only fetch once on initial mount
+      if (!hasLoadedInitialDataRef.current) {
+        hasLoadedInitialDataRef.current = true
+        fetchSpendingData()
+      }
     }, [fetchSpendingData])
 
     // Listen for real-time expense updates

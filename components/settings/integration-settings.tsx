@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,6 +22,7 @@ import {
   Shield,
   Zap,
 } from "lucide-react"
+import { createClient } from "@/lib/supabase/client"
 
 interface IntegrationSettingsProps {
   userId: string
@@ -44,7 +45,7 @@ export function IntegrationSettings({ userId }: IntegrationSettingsProps) {
       name: "Google Calendar",
       description: "Sync bill due dates and goal milestones to your calendar",
       icon: <Calendar className="w-5 h-5" />,
-      status: "connected",
+      status: "disconnected",
       type: "calendar",
       settings: {
         calendarId: "primary",
@@ -82,6 +83,29 @@ export function IntegrationSettings({ userId }: IntegrationSettingsProps) {
   const [loading, setLoading] = useState(false)
   const [activeTab, setActiveTab] = useState("overview")
 
+  // Detect if user has Google session token (connected via OAuth)
+  useEffect(() => {
+    const checkConnection = async () => {
+      try {
+        const supabase = createClient()
+        const { data: sessionData } = await supabase.auth.getSession()
+        const session = sessionData.session
+
+        const isGoogleConnected = Boolean((session as any)?.provider_token)
+        setIntegrations((prev) =>
+          prev.map((i) =>
+            i.id === "google-calendar"
+              ? { ...i, status: isGoogleConnected ? ("connected" as const) : ("disconnected" as const) }
+              : i,
+          ),
+        )
+      } catch (e) {
+        // ignore
+      }
+    }
+    checkConnection()
+  }, [])
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "connected":
@@ -111,13 +135,30 @@ export function IntegrationSettings({ userId }: IntegrationSettingsProps) {
   const handleConnect = async (integrationId: string) => {
     setLoading(true)
     try {
-      // Simulate connection process
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-
+      if (integrationId === "google-calendar") {
+        const supabase = createClient()
+        const redirectTo = typeof window !== "undefined" ? `${window.location.origin}/settings` : undefined
+        // Request Calendar scope so we can insert events without sharing
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: {
+            scopes: "https://www.googleapis.com/auth/calendar.events",
+            redirectTo,
+          },
+        })
+        if (error) throw error
+        // Browser will redirect; optimistic state update
+        setIntegrations((prev) =>
+          prev.map((integration) =>
+            integration.id === integrationId ? { ...integration, status: "connected" as const } : integration,
+          ),
+        )
+        return
+      }
+      // Other integrations: mock
+      await new Promise((resolve) => setTimeout(resolve, 1000))
       setIntegrations((prev) =>
-        prev.map((integration) =>
-          integration.id === integrationId ? { ...integration, status: "connected" as const } : integration,
-        ),
+        prev.map((integration) => (integration.id === integrationId ? { ...integration, status: "connected" as const } : integration)),
       )
     } catch (error) {
       console.error("Connection failed:", error)
@@ -129,13 +170,13 @@ export function IntegrationSettings({ userId }: IntegrationSettingsProps) {
   const handleDisconnect = async (integrationId: string) => {
     setLoading(true)
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      setIntegrations((prev) =>
-        prev.map((integration) =>
-          integration.id === integrationId ? { ...integration, status: "disconnected" as const } : integration,
-        ),
-      )
+      if (integrationId === "google-calendar") {
+        const supabase = createClient()
+        await supabase.auth.signOut()
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 500))
+      }
+      setIntegrations((prev) => prev.map((i) => (i.id === integrationId ? { ...i, status: "disconnected" as const } : i)))
     } catch (error) {
       console.error("Disconnection failed:", error)
     } finally {
@@ -186,7 +227,7 @@ export function IntegrationSettings({ userId }: IntegrationSettingsProps) {
                     {getStatusIcon(integration.status)}
                     <span className="ml-1 capitalize">{integration.status}</span>
                   </Badge>
-                  {integration.status === "connected" ? (
+                    {integration.status === "connected" ? (
                     <Button
                       onClick={() => handleDisconnect(integration.id)}
                       disabled={loading}
@@ -197,7 +238,7 @@ export function IntegrationSettings({ userId }: IntegrationSettingsProps) {
                     </Button>
                   ) : (
                     <Button onClick={() => handleConnect(integration.id)} disabled={loading} size="sm">
-                      {loading ? "Connecting..." : "Connect"}
+                      {loading ? "Connecting..." : integration.id === "google-calendar" ? "Connect with Google" : "Connect"}
                     </Button>
                   )}
                 </div>

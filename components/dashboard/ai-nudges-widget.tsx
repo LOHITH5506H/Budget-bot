@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Lightbulb, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { usePusherEvent } from "@/hooks/use-pusher"
 
 interface AiNudgesWidgetProps {
@@ -13,8 +13,18 @@ interface AiNudgesWidgetProps {
 export function AiNudgesWidget({ userId }: AiNudgesWidgetProps) {
   const [nudge, setNudge] = useState<string>("")
   const [loading, setLoading] = useState(true)
+  const hasLoadedRef = useRef(false) // Prevent duplicate calls on mount
+  const cacheKeyRef = useRef<string>("")
 
-  const generateNudge = useCallback(async () => {
+  const generateNudge = useCallback(async (force = false) => {
+    // Check cache first - only regenerate once per day unless forced
+    const cacheKey = `ai-insight-${userId}-${new Date().toDateString()}`
+    
+    if (!force && cacheKeyRef.current === cacheKey) {
+      console.log("[AI] Using cached insight for today")
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -32,6 +42,7 @@ export function AiNudgesWidget({ userId }: AiNudgesWidgetProps) {
 
       const data = await response.json()
       setNudge(data.insight)
+      cacheKeyRef.current = cacheKey // Mark as cached for today
     } catch (error) {
       console.error("Error fetching AI insights:", error)
       setNudge("Keep tracking your expenses to get personalized financial insights!")
@@ -41,20 +52,24 @@ export function AiNudgesWidget({ userId }: AiNudgesWidgetProps) {
   }, [userId])
 
   useEffect(() => {
-    generateNudge()
+    // Only run once on component mount
+    if (!hasLoadedRef.current) {
+      hasLoadedRef.current = true
+      generateNudge()
+    }
   }, [generateNudge])
 
   // Listen for real-time expense updates to refresh AI insights
   usePusherEvent('expense-updated', (data) => {
     console.log("[AIInsights] Received expense update, regenerating insights");
-    generateNudge();
+    generateNudge(true); // Force refresh when expense updated
   }, [generateNudge]);
 
   // Listen for custom expense events
   useEffect(() => {
     const handleExpenseAdded = () => {
       console.log("[AIInsights] Expense added event received, regenerating insights");
-      generateNudge();
+      generateNudge(true); // Force refresh when expense added
     };
 
     window.addEventListener('expense-added', handleExpenseAdded);
@@ -69,7 +84,7 @@ export function AiNudgesWidget({ userId }: AiNudgesWidgetProps) {
             <Lightbulb className="w-5 h-5 mr-2 text-yellow-600" />
             AI Insights
           </div>
-          <Button variant="ghost" size="sm" onClick={generateNudge} disabled={loading}>
+          <Button variant="ghost" size="sm" onClick={() => generateNudge(true)} disabled={loading}>
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
         </CardTitle>

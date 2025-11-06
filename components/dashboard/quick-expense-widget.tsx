@@ -8,11 +8,11 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Plus, IndianRupee } from "lucide-react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useToast } from "@/hooks/use-toast"
 import { useLoading } from "@/contexts/loading-context";
-import { useRouter } from "next/navigation"; // Import useRouter
+import { useRouter } from "next/navigation";
 
 interface QuickExpenseWidgetProps {
   userId: string
@@ -32,17 +32,24 @@ export function QuickExpenseWidget({ userId }: QuickExpenseWidgetProps) {
   const [categories, setCategories] = useState<Category[]>([])
   const { isLoading, showLoading, hideLoading } = useLoading();
   const { toast } = useToast()
-  const router = useRouter(); // Initialize the router
+  const router = useRouter();
+  const hasLoadedCategoriesRef = useRef(false) // Prevent duplicate fetches
 
   useEffect(() => {
     const fetchCategories = async () => {
+      // Only fetch once on component mount
+      if (hasLoadedCategoriesRef.current) {
+        return
+      }
+      
+      hasLoadedCategoriesRef.current = true
       const supabase = createClient()
       console.log("[QuickExpense] Fetching categories...")
       const { data, error } = await supabase.from("categories").select("id, name, icon").order("name")
       console.log("[QuickExpense] Categories response:", { data, error })
       if (data) {
         setCategories(data)
-        if (data[0] && !categoryId) {
+        if (data[0]) {
           setCategoryId(data[0].id)
           console.log("[QuickExpense] Default category set to:", data[0].id)
         }
@@ -52,7 +59,7 @@ export function QuickExpenseWidget({ userId }: QuickExpenseWidgetProps) {
       }
     }
     fetchCategories()
-  }, [userId, categoryId]); // Added categoryId dependency for robustness if needed later
+  }, []); // Empty deps - only run once on mount
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

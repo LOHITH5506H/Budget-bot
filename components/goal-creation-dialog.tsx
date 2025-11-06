@@ -11,7 +11,8 @@ import { createClient } from "@/lib/supabase/client"
 import { Plus, Target, CalendarPlus, Bell } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useLoading } from "@/contexts/loading-context";
-import { useToast } from "@/hooks/use-toast" // Import useToast
+import { useToast } from "@/hooks/use-toast"
+import { createGoalCalendarUrl, openCalendarInNewTab } from "@/lib/add-to-calendar"
 
 interface GoalCreationDialogProps {
   userId: string
@@ -26,7 +27,7 @@ export const GoalCreationDialog = forwardRef<HTMLButtonElement, GoalCreationDial
     const { toast } = useToast(); // Initialize toast
     const [formData, setFormData] = useState({
       name: "", description: "", target_amount: "", target_date: "",
-      sync_to_calendar: true, milestone_notifications: true,
+      add_to_calendar: false, milestone_notifications: true,
     })
     const router = useRouter()
 
@@ -112,40 +113,42 @@ export const GoalCreationDialog = forwardRef<HTMLButtonElement, GoalCreationDial
             );
         }
 
-        // 3. Sync to Google Calendar if enabled
-        if (formData.sync_to_calendar && formData.target_date) {
-            console.log("DIALOG (Goal): Attempting calendar sync...");
-            notificationPromises.push(
-                fetch('/api/calendar/sync', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        type: 'goal_milestone',
-                        data: {
-                            name: formData.name,
-                            targetDate: formData.target_date,
-                            targetAmount: targetAmountNum,
-                            currentAmount: 0
-                        }
-                    })
-                }).catch(err => console.error('DIALOG (Goal): Calendar sync failed:', err))
-            );
-        }
-
         // Execute all notifications in parallel without waiting
         Promise.all(notificationPromises).then(() => {
             console.log('DIALOG (Goal): All notifications processed');
         });
 
         console.log("DIALOG (Goal): Async operations likely complete.");
+        
+        // Prepare calendar data before closing dialog
+        const calendarData = {
+            name: formData.name,
+            targetAmount: targetAmountNum,
+            targetDate: formData.target_date ? new Date(formData.target_date) : new Date(),
+            description: formData.description
+        };
+        const shouldAddToCalendar = formData.add_to_calendar && formData.target_date;
+        
         // Success actions
         ensureHideLoading();
         setIsSubmitting(false);
         setOpen(false);
-        setFormData({ name: "", description: "", target_amount: "", target_date: "", sync_to_calendar: true, milestone_notifications: true });
+        setFormData({ name: "", description: "", target_amount: "", target_date: "", add_to_calendar: false, milestone_notifications: true });
         toast({ title: "Goal Created!", description: `Your goal "${formData.name}" has been added.` });
         router.refresh();
         console.log("DIALOG (Goal): Dialog closed, form reset, router refreshed.");
+        
+        // Open calendar in new tab after dialog closes
+        if (shouldAddToCalendar) {
+            const calendarUrl = createGoalCalendarUrl(
+                calendarData.name,
+                calendarData.targetAmount,
+                calendarData.targetDate,
+                0,
+                calendarData.description
+            );
+            openCalendarInNewTab(calendarUrl);
+        }
 
       } catch (error) {
         console.error("Error creating goal in catch block:", error);
@@ -185,7 +188,7 @@ export const GoalCreationDialog = forwardRef<HTMLButtonElement, GoalCreationDial
               <div><Label htmlFor="goal-target_amount">Target Amount (₹)</Label><Input id="goal-target_amount" type="number" step="0.01" min="0.01" placeholder="50000" value={formData.target_amount} onChange={(e) => setFormData({ ...formData, target_amount: e.target.value })} required disabled={isSubmitting} /></div>
               <div><Label htmlFor="goal-target_date">Target Date (Optional)</Label><Input id="goal-target_date" type="date" value={formData.target_date} onChange={(e) => setFormData({ ...formData, target_date: e.target.value })} disabled={isSubmitting} /></div>
               <div className="space-y-3 pt-2 border-t">
-                 <div className="flex items-center space-x-2"><Checkbox id="goal-sync_to_calendar" checked={formData.sync_to_calendar} onCheckedChange={(checked) => setFormData({ ...formData, sync_to_calendar: checked as boolean })} disabled={!formData.target_date || isSubmitting} /><Label htmlFor="goal-sync_to_calendar" className={`flex items-center text-sm ${isSubmitting || !formData.target_date ? 'opacity-50 cursor-not-allowed' : ''}`}><CalendarPlus className="w-4 h-4 mr-1 text-blue-600" /> Sync milestone to Google Calendar {!formData.target_date && <span className="text-xs text-gray-500 ml-1">(requires target date)</span>}</Label></div>
+                 <div className="flex items-center space-x-2"><Checkbox id="goal-add_to_calendar" checked={formData.add_to_calendar} onCheckedChange={(checked) => setFormData({ ...formData, add_to_calendar: checked as boolean })} disabled={!formData.target_date || isSubmitting} /><Label htmlFor="goal-add_to_calendar" className={`flex items-center text-sm ${isSubmitting || !formData.target_date ? 'opacity-50 cursor-not-allowed' : ''}`}><CalendarPlus className="w-4 h-4 mr-1 text-blue-600" /> Add to Google Calendar {!formData.target_date && <span className="text-xs text-gray-500 ml-1">(requires target date)</span>}</Label></div>
                  <div className="flex items-center space-x-2"><Checkbox id="goal-milestone_notifications" checked={formData.milestone_notifications} onCheckedChange={(checked) => setFormData({ ...formData, milestone_notifications: checked as boolean })} disabled={isSubmitting} /><Label htmlFor="goal-milestone_notifications" className={`flex items-center text-sm ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}><Bell className="w-4 h-4 mr-1 text-purple-600" /> Progress notifications via SendPulse</Label></div>
               </div>
               <DialogFooter>
