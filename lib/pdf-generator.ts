@@ -53,25 +53,43 @@ class PuppeteerPDFService {
 
   private async getBrowser(): Promise<Browser> {
     if (!this.browser) {
-      console.log('Launching Puppeteer browser for Vercel...');
+      console.log('🚀 Launching Puppeteer browser...');
+      console.log('Environment:', {
+        VERCEL: process.env.VERCEL,
+        NODE_ENV: process.env.NODE_ENV,
+        isProduction: process.env.VERCEL || process.env.NODE_ENV === 'production'
+      });
       
       // Vercel/production environment
       if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
         try {
+          console.log('📦 Importing @sparticuz/chromium...');
           const chromium = await import('@sparticuz/chromium');
+          console.log('📦 Importing puppeteer-core...');
           const puppeteerCore = await import('puppeteer-core');
           
+          console.log('🔧 Getting Chromium executable path...');
+          const executablePath = await chromium.default.executablePath();
+          console.log('✅ Chromium executable path:', executablePath);
+          
+          console.log('🚀 Launching browser with chromium...');
           this.browser = await puppeteerCore.default.launch({
-            args: [...chromium.default.args, '--disable-gpu'],
-            executablePath: await chromium.default.executablePath(),
+            args: chromium.default.args,
+            executablePath,
             headless: true,
           });
+          console.log('✅ Browser launched successfully');
         } catch (error) {
-          console.error('Error launching Chromium for Vercel:', error);
-          throw new Error('PDF generation is not available on this platform');
+          console.error('❌ Error launching Chromium for Vercel:', error);
+          console.error('Error details:', {
+            message: error instanceof Error ? error.message : 'Unknown error',
+            stack: error instanceof Error ? error.stack : undefined
+          });
+          throw new Error(`PDF generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       } else {
         // Local development
+        console.log('🏠 Using local Puppeteer...');
         const puppeteer = await import('puppeteer');
         this.browser = await puppeteer.default.launch({
           headless: true,
@@ -83,6 +101,7 @@ class PuppeteerPDFService {
           ],
           executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
         });
+        console.log('✅ Local browser launched successfully');
       }
     }
     return this.browser;

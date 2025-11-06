@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { pdfService } from '@/lib/pdf-generator';
 
+// Increase timeout for PDF generation
+export const maxDuration = 60; // 60 seconds
+export const dynamic = 'force-dynamic';
+
 /**
  * POST /api/reports/generate-weekly
  * 
