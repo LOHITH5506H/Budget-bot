@@ -1,8 +1,7 @@
 'use client';
 
 import React from 'react';
-import { createContext, useState, useContext, ReactNode, useCallback } from 'react'; // Added useCallback
-import { LoadingSpinner } from '@/components/ui/loading-spinner'; // Verify this path
+import { createContext, useState, useContext, ReactNode, useCallback } from 'react';
 
 interface LoadingContextType {
   isLoading: boolean;
@@ -50,9 +49,9 @@ export function LoadingProvider({ children }: { children: ReactNode }) {
       {children}
       {/* Conditionally render the overlay */}
       {isLoading && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm transition-opacity duration-150 ease-in-out animate-in fade-in"> {/* Added animation */}
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm transition-opacity duration-150 ease-in-out animate-in fade-in">
           <div className="flex flex-col items-center">
-            <LoadingSpinner size="lg" className="text-white" />
+            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-white"></div>
             <p className="mt-4 text-white text-lg font-medium">Loading...</p>
           </div>
         </div>

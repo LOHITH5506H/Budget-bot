@@ -146,24 +146,28 @@ export const SubscriptionCreationDialog = forwardRef<HTMLButtonElement, Subscrip
             // Send notifications in parallel (don't wait for them to prevent blocking)
             const notificationPromises = [];
 
-            // 1. Send Pusher real-time notification
+            // 1. Send Pusher real-time notification via trigger endpoint
             notificationPromises.push(
-                fetch('/api/notifications/send', {
+                fetch('/api/pusher/trigger', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         userId: userId,
-                        type: 'subscription_update',
-                        title: 'Subscription Added',
-                        message: `${formData.name} subscription has been added successfully!`,
+                        event: 'subscription-added',
                         data: {
-                            subscriptionName: formData.name,
+                            name: formData.name,
                             amount: amountNum,
                             billing_cycle: formData.billing_cycle,
                             next_due_date: formData.next_due_date
                         }
                     })
-                }).catch(err => console.error('DIALOG (Subscription): Pusher notification failed:', err))
+                }).then(res => {
+                    if (res.ok) {
+                        console.log('✅ Pusher notification sent successfully');
+                    } else {
+                        console.warn('⚠️ Pusher notification failed:', res.statusText);
+                    }
+                }).catch(err => console.error('❌ Pusher notification error:', err))
             );
 
             // 2. Send email notification if enabled
@@ -182,13 +186,19 @@ export const SubscriptionCreationDialog = forwardRef<HTMLButtonElement, Subscrip
                                 dueDate: formData.next_due_date
                             }
                         })
-                    }).catch(err => console.error('DIALOG (Subscription): Email notification failed:', err))
+                    }).then(res => {
+                        if (res.ok) {
+                            console.log('✅ Email notification sent successfully');
+                        } else {
+                            console.warn('⚠️ Email notification failed:', res.statusText);
+                        }
+                    }).catch(err => console.error('❌ Email notification error:', err))
                 );
             }
 
             // Execute all notifications in parallel without waiting
             Promise.all(notificationPromises).then(() => {
-                console.log('DIALOG (Subscription): All notifications processed');
+                console.log('✅ All notifications processed');
             });
 
             console.log("DIALOG (Subscription): Async operations likely complete.");
@@ -335,7 +345,7 @@ export const SubscriptionCreationDialog = forwardRef<HTMLButtonElement, Subscrip
                     </div>
                     <DialogFooter>
                         <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isSubmitting}>Cancel</Button>
-                        <Button type="submit" disabled={isSubmitting}>Add Subscription</Button>
+                        <Button type="submit" isLoading={isSubmitting} loadingText="Adding...">Add Subscription</Button>
                     </DialogFooter>
                 </form>
             </DialogContent>

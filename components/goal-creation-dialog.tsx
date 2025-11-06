@@ -193,7 +193,7 @@ export const GoalCreationDialog = forwardRef<HTMLButtonElement, GoalCreationDial
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isSubmitting}>Cancel</Button>
-                <Button type="submit" disabled={isSubmitting}>Create Goal</Button>
+                <Button type="submit" isLoading={isSubmitting} loadingText="Creating...">Create Goal</Button>
               </DialogFooter>
            </form>
         </DialogContent>

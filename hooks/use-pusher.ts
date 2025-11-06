@@ -90,11 +90,19 @@ export function usePusher({ userId, enabled = true }: UsePusherOptions): PusherH
   const setupChannelListeners = useCallback((userChannel: any) => {
     // Handle notifications
     userChannel.bind('notification', (data: NotificationData) => {
-      console.log('Received notification:', data);
-      setNotifications(prev => [data, ...prev].slice(0, 50)); // Keep last 50 notifications
+      console.log('🔔 [usePusher] Received notification:', data);
+      console.log('📊 [usePusher] Current notifications count:', notifications.length);
+      setNotifications(prev => {
+        const updated = [data, ...prev].slice(0, 50);
+        console.log('📊 [usePusher] Updated notifications count:', updated.length);
+        return updated;
+      }); // Keep last 50 notifications
       
       // Show browser notification if permission granted
       showBrowserNotification(data);
+      
+      // Dispatch custom event for toast notifications
+      window.dispatchEvent(new CustomEvent('pusher-notification', { detail: data }));
     });
 
     // Handle expense updates

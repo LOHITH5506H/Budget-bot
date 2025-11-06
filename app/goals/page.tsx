@@ -6,6 +6,8 @@ import { Progress } from "@/components/ui/progress"
 import { Target, Calendar, IndianRupee } from "lucide-react"
 import Link from "next/link"
 import { GoalCreationDialog } from "@/components/goal-creation-dialog"
+import { GoalActions } from "@/components/goals/goal-actions"
+import { AnimatedCard, AnimatedList, FadeIn } from "@/components/ui/animated-card"
 
 export default async function GoalsPage() {
   const supabase = await createClient()
@@ -44,7 +46,8 @@ export default async function GoalsPage() {
       </div>
 
       <main className="container mx-auto px-4 py-8">
-        <div className="grid gap-6">
+        <FadeIn>
+          <div className="grid gap-6">
           {/* Add New Goal Card */}
           <Card className="border-dashed border-2 border-blue-300 bg-blue-50">
             <CardContent className="p-6">
@@ -59,21 +62,28 @@ export default async function GoalsPage() {
 
           {/* Goals List */}
           {goals && goals.length > 0 ? (
-            <div className="grid gap-4">
-              {goals.map((goal: any) => {
+            <AnimatedList className="grid gap-4">
+              {goals.map((goal: any, index: number) => {
                 const progress = (goal.current_amount / goal.target_amount) * 100
                 const remaining = goal.target_amount - goal.current_amount
 
                 return (
-                  <Card key={goal.id} className="hover:shadow-md transition-shadow">
-                    <CardHeader>
-                      <CardTitle className="flex items-center justify-between">
+                  <AnimatedCard key={goal.id} index={index}>
+                    <Card className="hover:shadow-md transition-shadow">
+                    <CardHeader className="flex flex-row items-start justify-between gap-4">
+                      <CardTitle className="flex flex-col gap-2">
                         <span className="flex items-center">
                           <Target className="w-5 h-5 mr-2 text-blue-600" />
                           {goal.name}
                         </span>
                         <span className="text-sm font-normal text-gray-600">{progress.toFixed(1)}% complete</span>
                       </CardTitle>
+                      <GoalActions
+                        goalId={goal.id}
+                        goalName={goal.name}
+                        userId={user.id}
+                        targetAmount={goal.target_amount}
+                      />
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-4">
@@ -105,9 +115,10 @@ export default async function GoalsPage() {
                       </div>
                     </CardContent>
                   </Card>
+                  </AnimatedCard>
                 )
               })}
-            </div>
+            </AnimatedList>
           ) : (
             <Card>
               <CardContent className="p-12 text-center">
@@ -118,6 +129,7 @@ export default async function GoalsPage() {
             </Card>
           )}
         </div>
+        </FadeIn>
       </main>
     </div>
   )

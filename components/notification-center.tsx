@@ -89,26 +89,27 @@ export function NotificationCenter({ userId }: NotificationCenterProps) {
     },
   ])
 
-  const [localNotifications, setLocalNotifications] = useState<Notification[]>([
-    {
-      id: "1",
-      type: "bill_reminder",
-      title: "Netflix bill due tomorrow",
-      message: "Your Netflix subscription ($15.99) is due tomorrow",
-      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-      read: false,
-      priority: "high"
-    },
-    {
-      id: "2",
-      type: "goal_milestone",
-      title: "Vacation fund milestone reached!",
-      message: "Congratulations! You've reached 50% of your vacation fund goal",
-      timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000), // 1 day ago
-      read: true,
-      priority: "medium"
-    },
-  ])
+  const [localNotifications, setLocalNotifications] = useState<Notification[]>([])
+  
+  // Listen for Pusher notifications and show toast
+  useEffect(() => {
+    const handlePusherNotification = (event: any) => {
+      const notification = event.detail;
+      console.log('🔔 [NotificationCenter] Received Pusher notification:', notification);
+      
+      // Show toast notification
+      toast({
+        title: notification.title,
+        description: notification.message,
+        duration: 5000,
+      });
+    };
+
+    window.addEventListener('pusher-notification', handlePusherNotification);
+    return () => {
+      window.removeEventListener('pusher-notification', handlePusherNotification);
+    };
+  }, [toast])
 
   // Merge and sort notifications from both sources
   const allNotifications = [

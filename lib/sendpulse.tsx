@@ -98,9 +98,37 @@ export class SendPulseClient {
       })
 
       const result = await response.json()
-      return response.ok && result.result
+      
+      if (response.ok && result.result) {
+        return true
+      }
+      
+      // If SendPulse fails, try Gmail SMTP fallback
+      console.warn("SendPulse failed, attempting Gmail SMTP fallback...")
+      const { getGmailSMTPClient } = await import("./gmail-smtp")
+      const gmailClient = getGmailSMTPClient()
+      
+      if (gmailClient) {
+        return await gmailClient.sendEmail(notification)
+      }
+      
+      return false
     } catch (error) {
       console.error("SendPulse email error:", error)
+      
+      // Try Gmail SMTP fallback
+      try {
+        console.warn("SendPulse error occurred, attempting Gmail SMTP fallback...")
+        const { getGmailSMTPClient } = await import("./gmail-smtp")
+        const gmailClient = getGmailSMTPClient()
+        
+        if (gmailClient) {
+          return await gmailClient.sendEmail(notification)
+        }
+      } catch (fallbackError) {
+        console.error("Gmail SMTP fallback also failed:", fallbackError)
+      }
+      
       return false
     }
   }
@@ -135,8 +163,8 @@ export class SendPulseClient {
 // Initialize SendPulse client
 export function getSendPulseClient(): SendPulseClient {
   const config: SendPulseConfig = {
-    userId: process.env.SENDPULSE_USER_ID!,
-    secret: process.env.SENDPULSE_SECRET!,
+    userId: process.env.SENDPULSE_API_USER_ID!,
+    secret: process.env.SENDPULSE_API_SECRET!,
   }
 
   return new SendPulseClient(config)
@@ -156,7 +184,7 @@ export const emailTemplates = {
           <p style="color: #6b7280; font-size: 16px;">Don't forget about your upcoming bill:</p>
           <div style="background: white; padding: 20px; border-radius: 8px; border-left: 4px solid #10b981;">
             <h3 style="margin: 0 0 10px 0; color: #111827;">${billName}</h3>
-            <p style="margin: 5px 0; color: #6b7280;"><strong>Amount:</strong> $${amount}</p>
+            <p style="margin: 5px 0; color: #6b7280;"><strong>Amount:</strong> ₹${amount}</p>
             <p style="margin: 5px 0; color: #6b7280;"><strong>Due Date:</strong> ${dueDate}</p>
           </div>
           <p style="color: #6b7280; margin-top: 20px;">Stay on top of your finances with BudgetBot!</p>
@@ -181,7 +209,7 @@ export const emailTemplates = {
               <div style="background: #3b82f6; height: 20px; border-radius: 10px; width: ${progress}%;"></div>
             </div>
             <p style="margin: 5px 0; color: #6b7280;"><strong>Progress:</strong> ${progress}% complete</p>
-            <p style="margin: 5px 0; color: #6b7280;"><strong>Target:</strong> $${targetAmount}</p>
+            <p style="margin: 5px 0; color: #6b7280;"><strong>Target:</strong> ₹${targetAmount}</p>
           </div>
           <p style="color: #6b7280; margin-top: 20px;">Keep up the great work! You're on track to reach your goal.</p>
         </div>
@@ -201,9 +229,9 @@ export const emailTemplates = {
           <p style="color: #6b7280; font-size: 16px;">You're approaching your budget limit for this category:</p>
           <div style="background: white; padding: 20px; border-radius: 8px; border-left: 4px solid #f59e0b;">
             <h3 style="margin: 0 0 10px 0; color: #111827;">${category}</h3>
-            <p style="margin: 5px 0; color: #6b7280;"><strong>Current Spending:</strong> $${amount}</p>
-            <p style="margin: 5px 0; color: #6b7280;"><strong>Monthly Limit:</strong> $${monthlyLimit}</p>
-            <p style="margin: 5px 0; color: #6b7280;"><strong>Remaining:</strong> $${monthlyLimit - amount}</p>
+            <p style="margin: 5px 0; color: #6b7280;"><strong>Current Spending:</strong> ₹${amount}</p>
+            <p style="margin: 5px 0; color: #6b7280;"><strong>Monthly Limit:</strong> ₹${monthlyLimit}</p>
+            <p style="margin: 5px 0; color: #6b7280;"><strong>Remaining:</strong> ₹${monthlyLimit - amount}</p>
           </div>
           <p style="color: #6b7280; margin-top: 20px;">Consider reviewing your spending to stay within budget.</p>
         </div>

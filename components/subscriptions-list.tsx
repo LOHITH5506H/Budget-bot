@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Calendar, IndianRupee } from "lucide-react"
 import { SubscriptionCreationDialog } from "@/components/subscription-creation-dialog"
 import { SubscriptionLogo } from "@/components/subscription-logo"
-import { LoadingSpinner } from "@/components/ui/loading-spinner"
+import { SubscriptionActions } from "@/components/subscriptions/subscription-actions"
 import Pusher from 'pusher-js'
 
 interface Subscription {
@@ -98,7 +98,7 @@ export function SubscriptionsList({ userId }: SubscriptionsListProps) {
   if (loading) {
     return (
       <div className="flex justify-center items-center py-12">
-        <LoadingSpinner className="w-8 h-8" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
       </div>
     )
   }
@@ -123,26 +123,33 @@ export function SubscriptionsList({ userId }: SubscriptionsListProps) {
           {subscriptions.map((subscription) => (
             <Card key={subscription.id} className="hover:shadow-md transition-shadow">
               <CardContent className="p-6">
-                <div className="flex items-center justify-between">
+                <div className="flex items-start justify-between gap-4">
                   <div className="flex items-center space-x-4">
-                    <SubscriptionLogo 
-                      logoUrl={subscription.logo_url} 
-                      subscriptionName={subscription.name} 
+                    <SubscriptionLogo
+                      logoUrl={subscription.logo_url}
+                      subscriptionName={subscription.name}
                     />
                     <div>
                       <h3 className="font-semibold text-gray-900">{subscription.name}</h3>
-                      <p className="text-sm text-gray-600 capitalize">{subscription.billing_cycle || 'monthly'}</p>
+                      <p className="text-sm text-gray-600 capitalize">{subscription.billing_cycle || "monthly"}</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="flex items-center text-lg font-semibold text-gray-900">
-                      <IndianRupee className="w-4 h-4 mr-1" />
-                      {subscription.amount}
-                    </div>
-                    <div className="flex items-center text-sm text-gray-600">
-                      <Calendar className="w-4 h-4 mr-1" />
-                      Due: {new Date(subscription.next_due_date).toLocaleDateString()}
-                    </div>
+                  <SubscriptionActions
+                    subscriptionId={subscription.id}
+                    subscriptionName={subscription.name}
+                    subscriptionAmount={subscription.amount}
+                    subscriptionBillingCycle={subscription.billing_cycle}
+                    subscriptionNextDueDate={subscription.next_due_date}
+                  />
+                </div>
+                <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
+                  <div className="flex items-center text-lg font-semibold text-gray-900">
+                    <IndianRupee className="w-4 h-4 mr-1" />
+                    {subscription.amount}
+                  </div>
+                  <div className="flex items-center">
+                    <Calendar className="w-4 h-4 mr-1" />
+                    Due: {new Date(subscription.next_due_date).toLocaleDateString()}
                   </div>
                 </div>
               </CardContent>

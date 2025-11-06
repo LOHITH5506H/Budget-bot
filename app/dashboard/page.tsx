@@ -7,6 +7,7 @@ import { SpendingOverviewWidget } from "@/components/dashboard/spending-overview
 import { SavingsGoalsWidget } from "@/components/dashboard/savings-goals-widget"
 import { UpcomingSubscriptionsWidget } from "@/components/dashboard/upcoming-subscriptions-widget"
 import { AiNudgesWidget } from "@/components/dashboard/ai-nudges-widget"
+import { WeeklyReportWidget } from "@/components/dashboard/weekly-report-widget"
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -43,6 +44,7 @@ export default async function DashboardPage() {
 
           {/* Right Column */}
           <div className="space-y-6">
+            <WeeklyReportWidget />
             <SavingsGoalsWidget userId={user.id} />
             <UpcomingSubscriptionsWidget userId={user.id} />
             <AiNudgesWidget userId={user.id} />

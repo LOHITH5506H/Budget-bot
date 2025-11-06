@@ -89,13 +89,19 @@ export function QuickExpenseWidget({ userId }: QuickExpenseWidgetProps) {
       const supabase = createClient()
       console.log("[v0] Submitting expense:", { userId, amount: amountNum, description, categoryId, isNeed })
 
+      const today = new Date()
+      const todayIso = today.toISOString().split("T")[0]
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
+      const yesterdayIso = yesterday.toISOString().split("T")[0]
+
       const { error } = await supabase.from("expenses").insert({
         user_id: userId,
         amount: amountNum,
         description,
         category_id: categoryId,
         is_need: isNeed,
-        expense_date: new Date().toISOString().split("T")[0],
+        expense_date: todayIso,
       })
 
       if (error) {
@@ -104,6 +110,72 @@ export function QuickExpenseWidget({ userId }: QuickExpenseWidgetProps) {
       }
 
       console.log("[v0] Expense added successfully");
+
+      try {
+        const { data: currentStreak, error: fetchStreakError } = await supabase
+          .from("streaks")
+          .select("id, current_streak, longest_streak, last_activity_date")
+          .eq("user_id", userId)
+          .maybeSingle()
+
+        if (fetchStreakError) {
+          console.error("[Streak] Failed to load streak information:", fetchStreakError)
+        } else if (!currentStreak) {
+          const { error: createStreakError } = await supabase.from("streaks").insert({
+            user_id: userId,
+            current_streak: 1,
+            longest_streak: 1,
+            last_activity_date: todayIso,
+            streak_freezes: 1,
+          })
+
+          if (createStreakError) {
+            console.error("[Streak] Failed to initialise streak record:", createStreakError)
+          } else {
+            console.log("[Streak] Created initial streak record")
+          }
+        } else {
+          const lastActivityDate = currentStreak.last_activity_date
+            ? String(currentStreak.last_activity_date).slice(0, 10)
+            : null
+          const updates: Record<string, unknown> = {
+            updated_at: new Date().toISOString(),
+          }
+
+          if (!lastActivityDate) {
+            updates.current_streak = 1
+            updates.longest_streak = Math.max(1, currentStreak.longest_streak ?? 0)
+            updates.last_activity_date = todayIso
+          } else if (lastActivityDate === todayIso) {
+            // Same-day expense: keep streak unchanged, just bump timestamp
+            updates.last_activity_date = lastActivityDate
+          } else if (lastActivityDate === yesterdayIso) {
+            const nextStreakValue = (currentStreak.current_streak ?? 0) + 1
+            updates.current_streak = nextStreakValue
+            updates.longest_streak = Math.max(nextStreakValue, currentStreak.longest_streak ?? 0)
+            updates.last_activity_date = todayIso
+          } else {
+            updates.current_streak = 1
+            updates.last_activity_date = todayIso
+            if ((currentStreak.longest_streak ?? 0) < 1) {
+              updates.longest_streak = 1
+            }
+          }
+
+          const { error: streakUpdateError } = await supabase
+            .from("streaks")
+            .update(updates)
+            .eq("id", currentStreak.id)
+
+          if (streakUpdateError) {
+            console.error("[Streak] Failed to update streak progress:", streakUpdateError)
+          } else {
+            console.log("[Streak] Streak progress synced locally", updates)
+          }
+        }
+      } catch (streakError) {
+        console.error("[Streak] Unexpected error while syncing streak:", streakError)
+      }
 
       // Send real-time notification to update dashboard
       try {

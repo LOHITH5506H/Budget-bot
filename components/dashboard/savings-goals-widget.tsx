@@ -7,6 +7,7 @@ import { Target, Plus } from "lucide-react"
 import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { GoalCreationDialog } from "@/components/goal-creation-dialog"
+import { GoalActions } from "@/components/goals/goal-actions"
 import { useLoadingNavigation } from "@/hooks/use-loading-navigation"
 import { usePusherEvent } from "@/hooks/use-pusher"
 
@@ -111,9 +112,17 @@ export function SavingsGoalsWidget({ userId }: SavingsGoalsWidgetProps) {
               const progress = (goal.current_amount / goal.target_amount) * 100
               return (
                 <div key={goal.id} className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <h4 className="text-sm font-medium text-gray-900">{goal.name}</h4>
-                    <span className="text-xs text-gray-600">{progress.toFixed(0)}%</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex flex-col">
+                      <h4 className="text-sm font-medium text-gray-900">{goal.name}</h4>
+                      <span className="text-xs text-gray-600">{progress.toFixed(0)}% complete</span>
+                    </div>
+                    <GoalActions
+                      goalId={goal.id}
+                      goalName={goal.name}
+                      userId={userId}
+                      targetAmount={goal.target_amount}
+                    />
                   </div>
                   <Progress value={progress} className="h-2" />
                   <div className="flex justify-between text-xs text-gray-600">

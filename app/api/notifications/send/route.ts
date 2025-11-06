@@ -7,6 +7,8 @@ import { pusherService, NotificationData } from "@/lib/pusher-service"
 export async function POST(request: NextRequest) {
   try {
     const { type, data, recipients, userId, title, message } = await request.json()
+    
+    console.log('[Notifications] Received request:', { type, userId, title, hasRecipients: !!recipients });
 
     // Initialize Supabase client
     const cookieStore = await cookies()
@@ -20,21 +22,43 @@ export async function POST(request: NextRequest) {
 
     // Get user info (either from auth or userId parameter)
     let user: any = null;
+    let userEmail: string | null = null;
+    
     if (userId) {
+      // First try to get from profiles table
       const { data: profile } = await supabase
         .from('profiles')
         .select('id, email, display_name')
         .eq('id', userId)
         .single();
-      user = profile;
+      
+      if (profile) {
+        user = profile;
+        userEmail = profile.email;
+      } else {
+        // Fallback: Get from auth.users table
+        const { data: authData } = await supabase.auth.admin.getUserById(userId);
+        if (authData?.user) {
+          user = { 
+            id: authData.user.id, 
+            email: authData.user.email,
+            display_name: authData.user.user_metadata?.display_name || authData.user.email 
+          };
+          userEmail = authData.user.email || null;
+        }
+      }
     } else {
       const { data: authData } = await supabase.auth.getUser()
       user = authData.user;
+      userEmail = authData.user?.email || null;
     }
 
-    if (!user) {
+    if (!user || !userEmail) {
+      console.error("Notification send error: User not found or no email available");
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
+    
+    console.log('[Notifications] User found:', { userId: user.id, email: userEmail });
 
     const sendPulse = getSendPulseClient()
     let emailSuccess = false
@@ -62,6 +86,8 @@ export async function POST(request: NextRequest) {
 
     // Send email notification if recipients specified or for specific types
     if (recipients?.email || ['bill_reminder', 'goal_milestone', 'spending_alert', 'report_ready'].includes(type)) {
+      console.log('[Notifications] Sending email notification, type:', type);
+      
       switch (type) {
         case "bill_reminder":
           const billTemplate = emailTemplates.billReminder(
@@ -69,18 +95,20 @@ export async function POST(request: NextRequest) {
             data.amount,
             new Date(data.dueDate).toLocaleDateString(),
           )
+          console.log('[Notifications] Sending bill reminder email to:', userEmail);
           emailSuccess = await sendPulse.sendEmail({
-            to: recipients?.email || [user.email],
+            to: recipients?.email || [userEmail!],
             subject: billTemplate.subject,
             html: billTemplate.html,
           })
+          console.log('[Notifications] Bill reminder email sent, success:', emailSuccess);
           break
 
         case "goal_milestone":
           const progress = Math.round((data.currentAmount / data.targetAmount) * 100)
           const goalTemplate = emailTemplates.goalMilestone(data.goalName, progress, data.targetAmount)
           emailSuccess = await sendPulse.sendEmail({
-            to: recipients?.email || [user.email],
+            to: recipients?.email || [userEmail!],
             subject: goalTemplate.subject,
             html: goalTemplate.html,
           })
@@ -89,7 +117,7 @@ export async function POST(request: NextRequest) {
         case "spending_alert":
           const alertTemplate = emailTemplates.spendingAlert(data.amount, data.category, data.monthlyLimit)
           emailSuccess = await sendPulse.sendEmail({
-            to: recipients?.email || [user.email],
+            to: recipients?.email || [userEmail!],
             subject: alertTemplate.subject,
             html: alertTemplate.html,
           })
@@ -97,7 +125,7 @@ export async function POST(request: NextRequest) {
 
         case "report_ready":
           emailSuccess = await sendPulse.sendEmail({
-            to: recipients?.email || [user.email],
+            to: recipients?.email || [userEmail!],
             subject: data.subject || 'Your Report is Ready',
             html: data.html || message,
             attachments: data.attachments,
@@ -116,7 +144,7 @@ export async function POST(request: NextRequest) {
         case "email":
           // Direct email sending
           emailSuccess = await sendPulse.sendEmail({
-            to: recipients?.to || [user.email],
+            to: recipients?.to || [userEmail!],
             subject: data.subject || title,
             html: data.html || message,
             attachments: data.attachments,

@@ -1,52 +1,138 @@
-import Pusher from 'pusher';
+import { pusherService } from '@/lib/pusher-service';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
-const pusher = new Pusher({
-  appId: process.env.PUSHER_APP_ID!,
-  key: process.env.NEXT_PUBLIC_PUSHER_KEY!,
-  secret: process.env.PUSHER_SECRET!,
-  cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER!,
-  useTLS: true,
-});
+interface TriggerRequest {
+  userId?: string;
+  channel?: string;
+  event: string;
+  data: any;
+}
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("PUSHER TRIGGER: Starting request processing");
+    console.log("🔔 [Pusher Trigger] Starting request processing");
     
     // Verify user is authenticated
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) {
-      console.log("PUSHER TRIGGER: User not authenticated");
+      console.warn("⚠️ [Pusher Trigger] Unauthorized request");
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Unauthorized', success: false },
         { status: 401 }
       );
     }
 
-    const { channel, event, data } = await request.json();
+    const body: TriggerRequest = await request.json();
+    const { userId, channel, event, data } = body;
     
-    if (!channel || !event) {
-      console.log("PUSHER TRIGGER: Missing required fields", { channel, event });
+    // Validate required fields
+    if (!event) {
+      console.warn("⚠️ [Pusher Trigger] Missing event name");
       return NextResponse.json(
-        { error: 'Missing channel or event' },
+        { error: 'Event name is required', success: false },
         { status: 400 }
       );
     }
 
-    console.log("PUSHER TRIGGER: Sending event", { channel, event, dataKeys: Object.keys(data || {}) });
+    // Determine channel - either explicit or user-based
+    const targetChannel = channel || `private-user-${userId || user.id}`;
+    
+    console.log(`📡 [Pusher Trigger] Sending event: ${event} to channel: ${targetChannel}`);
 
-    await pusher.trigger(channel, event, data);
+    // Handle different event types with smart error handling
+    let success = false;
     
-    console.log("PUSHER TRIGGER: Event sent successfully");
-    
-    return NextResponse.json({ success: true });
+    switch (event) {
+      case 'subscription-added':
+        success = await pusherService.sendSubscriptionAdded(
+          userId || user.id,
+          data
+        );
+        break;
+        
+      case 'subscription-updated':
+        success = await pusherService.sendSubscriptionUpdated(
+          userId || user.id,
+          data
+        );
+        break;
+        
+      case 'subscription-deleted':
+        success = await pusherService.sendSubscriptionDeleted(
+          userId || user.id,
+          data.name,
+          data.id
+        );
+        break;
+        
+      case 'expense-updated':
+        success = await pusherService.sendExpenseUpdate(
+          userId || user.id,
+          data
+        );
+        break;
+        
+      case 'goal-updated':
+        success = await pusherService.sendGoalProgressUpdate(
+          userId || user.id,
+          data
+        );
+        break;
+        
+      case 'dashboard-refresh':
+        success = await pusherService.sendDashboardRefresh(
+          userId || user.id
+        );
+        break;
+        
+      default:
+        // Generic event trigger with retry logic
+        console.log(`📨 [Pusher Trigger] Generic event: ${event}`);
+        success = await pusherService.sendNotificationToUser(
+          userId || user.id,
+          {
+            id: `${event}-${Date.now()}`,
+            title: data.title || 'Notification',
+            message: data.message || '',
+            type: 'general',
+            timestamp: new Date().toISOString(),
+            data: data
+          }
+        );
+    }
+
+    if (success) {
+      console.log(`✅ [Pusher Trigger] Event sent successfully: ${event}`);
+      return NextResponse.json({ 
+        success: true,
+        event,
+        channel: targetChannel
+      });
+    } else {
+      console.warn(`⚠️ [Pusher Trigger] Event failed to send: ${event}`);
+      return NextResponse.json(
+        { 
+          success: false,
+          error: 'Failed to send notification (Pusher may not be configured)',
+          event,
+          channel: targetChannel
+        },
+        { status: 500 }
+      );
+    }
   } catch (error) {
-    console.error('PUSHER TRIGGER: Error triggering Pusher event:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('❌ [Pusher Trigger] Error:', errorMessage);
+    
     return NextResponse.json(
-      { error: 'Failed to trigger event' },
+      { 
+        error: 'Internal server error',
+        details: errorMessage,
+        success: false
+      },
       { status: 500 }
     );
   }

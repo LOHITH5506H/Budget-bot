@@ -6,6 +6,8 @@ import { Calendar, IndianRupee } from "lucide-react"
 import Link from "next/link"
 import { SubscriptionCreationDialog } from "@/components/subscription-creation-dialog"
 import { SubscriptionLogo } from "@/components/subscription-logo"
+import { SubscriptionActions } from "@/components/subscriptions/subscription-actions"
+import { AnimatedCard, AnimatedList, FadeIn } from "@/components/ui/animated-card"
 
 export default async function SubscriptionsPage() {
   const supabase = await createClient()
@@ -56,7 +58,8 @@ export default async function SubscriptionsPage() {
       </div>
 
       <main className="container mx-auto px-4 py-8">
-        <div className="grid gap-6">
+        <FadeIn>
+          <div className="grid gap-6">
           {/* Add New Subscription Card */}
           <Card className="border-dashed border-2 border-emerald-300 bg-emerald-50">
             <CardContent className="p-6">
@@ -71,36 +74,45 @@ export default async function SubscriptionsPage() {
 
           {/* Subscriptions List */}
           {subscriptions && subscriptions.length > 0 ? (
-            <div className="grid gap-4">
-              {subscriptions.map((subscription: any) => (
-                <Card key={subscription.id} className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <SubscriptionLogo 
-                          logoUrl={subscription.logo_url} 
-                          subscriptionName={subscription.name} 
-                        />
-                        <div>
-                          <h3 className="font-semibold text-gray-900">{subscription.name}</h3>
-                          <p className="text-sm text-gray-600 capitalize">{subscription.billing_cycle || 'monthly'}</p>
+            <AnimatedList className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {subscriptions.map((subscription: any, index: number) => (
+                <AnimatedCard key={subscription.id} index={index}>
+                  <Card className="hover:shadow-md transition-shadow h-full">
+                    <CardContent className="p-6">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex items-center space-x-4">
+                          <SubscriptionLogo
+                            logoUrl={subscription.logo_url}
+                            subscriptionName={subscription.name}
+                          />
+                          <div>
+                            <h3 className="font-semibold text-gray-900">{subscription.name}</h3>
+                            <p className="text-sm text-gray-600 capitalize">{subscription.billing_cycle || "monthly"}</p>
+                          </div>
                         </div>
+                        <SubscriptionActions
+                          subscriptionId={subscription.id}
+                          subscriptionName={subscription.name}
+                          subscriptionAmount={subscription.amount}
+                          subscriptionBillingCycle={subscription.billing_cycle}
+                          subscriptionNextDueDate={subscription.next_due_date}
+                        />
                       </div>
-                      <div className="text-right">
+                      <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
                         <div className="flex items-center text-lg font-semibold text-gray-900">
                           <IndianRupee className="w-4 h-4 mr-1" />
                           {subscription.amount}
                         </div>
-                        <div className="flex items-center text-sm text-gray-600">
+                        <div className="flex items-center">
                           <Calendar className="w-4 h-4 mr-1" />
                           Due: {new Date(subscription.next_due_date).toLocaleDateString()}
                         </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
+                </AnimatedCard>
               ))}
-            </div>
+            </AnimatedList>
           ) : (
             <Card>
               <CardContent className="p-12 text-center">
@@ -111,6 +123,7 @@ export default async function SubscriptionsPage() {
             </Card>
           )}
         </div>
+        </FadeIn>
       </main>
     </div>
   )

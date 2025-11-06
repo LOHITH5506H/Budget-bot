@@ -9,7 +9,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import { TrendingUp, Settings, LogOut, User, CreditCard, Target, BarChart3 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
@@ -114,7 +113,7 @@ export function DashboardHeader({ user, profile }: DashboardHeaderProps) {
                 <div className="flex items-center gap-2">
                   {isLoggingOut ? (
                     <>
-                      <LoadingSpinner size="sm" />
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600"></div>
                       <span>Signing out...</span>
                     </>
                   ) : (
