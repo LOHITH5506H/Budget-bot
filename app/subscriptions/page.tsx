@@ -9,6 +9,10 @@ import { SubscriptionLogo } from "@/components/subscription-logo"
 import { SubscriptionActions } from "@/components/subscriptions/subscription-actions"
 import { AnimatedCard, AnimatedList, FadeIn } from "@/components/ui/animated-card"
 
+// Disable caching for real-time updates
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export default async function SubscriptionsPage() {
   const supabase = await createClient()
 

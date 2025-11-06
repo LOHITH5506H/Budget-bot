@@ -9,6 +9,10 @@ import { GoalCreationDialog } from "@/components/goal-creation-dialog"
 import { GoalActions } from "@/components/goals/goal-actions"
 import { AnimatedCard, AnimatedList, FadeIn } from "@/components/ui/animated-card"
 
+// Disable caching for real-time updates
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export default async function GoalsPage() {
   const supabase = await createClient()
 

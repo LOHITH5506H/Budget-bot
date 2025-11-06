@@ -1,4 +1,4 @@
-import puppeteer, { Browser, Page } from 'puppeteer';
+import { Browser, Page } from 'puppeteer-core';
 import { createClient } from '@/lib/supabase/server';
 
 interface ReportData {
@@ -53,17 +53,37 @@ class PuppeteerPDFService {
 
   private async getBrowser(): Promise<Browser> {
     if (!this.browser) {
-      console.log('Launching Puppeteer browser...');
-      this.browser = await puppeteer.launch({
-        headless: true,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu',
-        ],
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
-      });
+      console.log('Launching Puppeteer browser for Vercel...');
+      
+      // Vercel/production environment
+      if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+        try {
+          const chromium = await import('@sparticuz/chromium');
+          const puppeteerCore = await import('puppeteer-core');
+          
+          this.browser = await puppeteerCore.default.launch({
+            args: [...chromium.default.args, '--disable-gpu'],
+            executablePath: await chromium.default.executablePath(),
+            headless: true,
+          });
+        } catch (error) {
+          console.error('Error launching Chromium for Vercel:', error);
+          throw new Error('PDF generation is not available on this platform');
+        }
+      } else {
+        // Local development
+        const puppeteer = await import('puppeteer');
+        this.browser = await puppeteer.default.launch({
+          headless: true,
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+          ],
+          executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
+        });
+      }
     }
     return this.browser;
   }
@@ -104,7 +124,7 @@ class PuppeteerPDFService {
       });
 
       console.log(`${reportType} report generated successfully for user:`, userId);
-      return pdfBuffer;
+      return Buffer.from(pdfBuffer);
 
     } finally {
       await page.close();
