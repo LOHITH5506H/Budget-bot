@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
-import { LoadingProvider } from '@/contexts/loading-context'; // Import the provider
+import { LoadingProvider } from '@/contexts/loading-context';
+import { GlobalPusherProvider } from '@/components/global-pusher-provider';
 import NextTopLoader from 'nextjs-toploader';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -22,7 +23,8 @@ export default function RootLayout({
       <body className={inter.className}>
         {/* Global route change progress bar */}
         <NextTopLoader color="#0ea5e9" height={3} showSpinner={false} crawlSpeed={200} speed={200} />
-        <LoadingProvider> {/* Wrap children with the provider */}
+        <LoadingProvider>
+          <GlobalPusherProvider />
           {children}
         </LoadingProvider>
       </body>
