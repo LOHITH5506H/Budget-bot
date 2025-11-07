@@ -49,6 +49,15 @@ export function usePusher({ userId, enabled = true }: UsePusherOptions): PusherH
 
     // Subscribe to user's private channel
     const userChannel = pusherInstance.subscribe(`private-user-${userId}`);
+    
+    // Log subscription events
+    userChannel.bind('pusher:subscription_succeeded', () => {
+      console.log('✅ [usePusher] Successfully subscribed to channel:', `private-user-${userId}`);
+    });
+    
+    userChannel.bind('pusher:subscription_error', (error: any) => {
+      console.error('❌ [usePusher] Subscription error:', error);
+    });
 
     // Connection event handlers
     pusherInstance.connection.bind('connected', () => {
@@ -88,9 +97,16 @@ export function usePusher({ userId, enabled = true }: UsePusherOptions): PusherH
 
   // Set up channel event listeners
   const setupChannelListeners = useCallback((userChannel: any) => {
+    console.log('🎯 [usePusher] Setting up channel listeners for channel:', userChannel.name);
+    
+    // Log all events for debugging
+    userChannel.bind_global((eventName: string, data: any) => {
+      console.log('🔥 [usePusher] Received event:', eventName, 'with data:', data);
+    });
+    
     // Handle notifications
     userChannel.bind('notification', (data: NotificationData) => {
-      console.log('🔔 [usePusher] Received notification:', data);
+      console.log('🔔 [usePusher] Received notification event:', data);
       console.log('📊 [usePusher] Current notifications count:', notifications.length);
       setNotifications(prev => {
         const updated = [data, ...prev].slice(0, 50);

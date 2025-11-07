@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
     const targetChannel = channel || `private-user-${userId || user.id}`;
     
     console.log(`📡 [Pusher Trigger] Sending event: ${event} to channel: ${targetChannel}`);
+    console.log(`📦 [Pusher Trigger] Event data:`, JSON.stringify(data, null, 2));
 
     // Handle different event types with smart error handling
     let success = false;
