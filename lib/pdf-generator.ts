@@ -1,4 +1,4 @@
-import { Browser, Page } from 'puppeteer-core';
+import type { Browser, Page } from 'puppeteer-core';
 import { createClient } from '@/lib/supabase/server';
 
 interface ReportData {
@@ -57,31 +57,33 @@ class PuppeteerPDFService {
       console.log('Environment:', {
         VERCEL: process.env.VERCEL,
         NODE_ENV: process.env.NODE_ENV,
-        isProduction: process.env.VERCEL || process.env.NODE_ENV === 'production'
+        AWS_EXECUTION_ENV: process.env.AWS_EXECUTION_ENV,
+        AWS_LAMBDA_FUNCTION_NAME: process.env.AWS_LAMBDA_FUNCTION_NAME
       });
       
       // Vercel/production environment
       if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
         try {
-          console.log('📦 Importing chrome-aws-lambda...');
-          const chrome = await import('chrome-aws-lambda');
-          console.log('📦 Importing puppeteer-core...');
-          const puppeteerCore = await import('puppeteer-core');
+          console.log('📦 Loading chrome-aws-lambda...');
+          const chrome = require('chrome-aws-lambda');
+          console.log('📦 Loading puppeteer-core...');
+          const puppeteerCore = require('puppeteer-core');
           
           console.log('🔧 Getting Chromium executable path from chrome-aws-lambda...');
-          const executablePath = await chrome.default.executablePath;
+          const executablePath = await chrome.executablePath;
           console.log('✅ Chromium executable path:', executablePath);
           
           console.log('🚀 Launching browser with chrome-aws-lambda...');
-          this.browser = await puppeteerCore.default.launch({
-            args: chrome.default.args,
+          this.browser = await puppeteerCore.launch({
+            args: chrome.args,
             executablePath,
-            headless: chrome.default.headless,
+            headless: chrome.headless,
           });
           console.log('✅ Browser launched successfully');
         } catch (error) {
           console.error('❌ Error launching Chromium for Vercel:', error);
           console.error('Error details:', {
+            name: error instanceof Error ? error.name : 'Unknown',
             message: error instanceof Error ? error.message : 'Unknown error',
             stack: error instanceof Error ? error.stack : undefined
           });
@@ -90,8 +92,8 @@ class PuppeteerPDFService {
       } else {
         // Local development
         console.log('🏠 Using local Puppeteer...');
-        const puppeteer = await import('puppeteer');
-        this.browser = await puppeteer.default.launch({
+        const puppeteer = require('puppeteer');
+        this.browser = await puppeteer.launch({
           headless: true,
           args: [
             '--no-sandbox',
@@ -134,7 +136,7 @@ class PuppeteerPDFService {
       await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
 
       const pdfBuffer = await page.pdf({
-        format: 'A4',
+        format: 'a4',
         margin: { top: '20px', bottom: '20px', left: '20px', right: '20px' },
         printBackground: true,
         displayHeaderFooter: true,
@@ -143,7 +145,7 @@ class PuppeteerPDFService {
       });
 
       console.log(`${reportType} report generated successfully for user:`, userId);
-      return Buffer.from(pdfBuffer);
+      return pdfBuffer as Buffer;
 
     } finally {
       await page.close();
