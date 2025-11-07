@@ -135,6 +135,18 @@ export const GoalCreationDialog = forwardRef<HTMLButtonElement, GoalCreationDial
         setOpen(false);
         setFormData({ name: "", description: "", target_amount: "", target_date: "", add_to_calendar: false, milestone_notifications: true });
         toast({ title: "Goal Created!", description: `Your goal "${formData.name}" has been added.` });
+        
+        // Dispatch event for AI Insights refresh
+        window.dispatchEvent(
+            new CustomEvent("goal-added", {
+                detail: { 
+                    name: formData.name,
+                    target_amount: targetAmountNum,
+                    type: "goal-added" 
+                },
+            }),
+        );
+        
         router.refresh();
         console.log("DIALOG (Goal): Dialog closed, form reset, router refreshed.");
         

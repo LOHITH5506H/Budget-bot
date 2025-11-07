@@ -6,6 +6,13 @@ import { withGeminiRateLimit, createRateLimitMiddleware, rateLimiters } from "@/
 const insightCache = new Map<string, { insight: string, timestamp: number }>()
 const CACHE_DURATION = 1000 * 60 * 30 // 30 minutes cache
 
+// Function to invalidate cache for a user
+export function invalidateInsightCache(userId: string) {
+  const cacheKey = `${userId}-${new Date().toDateString()}`
+  insightCache.delete(cacheKey)
+  console.log("[v0] Invalidated AI insight cache for user:", userId)
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Check rate limit
@@ -14,19 +21,23 @@ export async function POST(request: NextRequest) {
       return rateLimitResponse
     }
 
-    const { userId } = await request.json()
+    const { userId, force } = await request.json()
 
     if (!userId) {
       return NextResponse.json({ error: "User ID is required" }, { status: 400 })
     }
 
-    // Check cache first - one insight per user per day
+    // Check cache first - one insight per user per day (unless force refresh)
     const cacheKey = `${userId}-${new Date().toDateString()}`
     const cached = insightCache.get(cacheKey)
     
-    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    if (!force && cached && Date.now() - cached.timestamp < CACHE_DURATION) {
       console.log("[v0] Returning cached AI insight (age:", Math.round((Date.now() - cached.timestamp) / 1000 / 60), "minutes)")
       return NextResponse.json({ insight: cached.insight, cached: true })
+    }
+    
+    if (force) {
+      console.log("[v0] Force refresh requested, bypassing cache")
     }
 
     const supabase = await createClient()

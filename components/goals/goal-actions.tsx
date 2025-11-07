@@ -139,8 +139,8 @@ export function GoalActions({ goalId, goalName, userId, targetAmount }: GoalActi
 
       // Dispatch custom event for real-time updates
       window.dispatchEvent(
-        new CustomEvent("goal-updated", {
-          detail: { goalId, type: "goal-deleted" },
+        new CustomEvent("goal-deleted", {
+          detail: { goalId, goalName, type: "goal-deleted" },
         }),
       )
 

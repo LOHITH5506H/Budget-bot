@@ -170,8 +170,8 @@ export function SubscriptionActions({
 
       // Dispatch custom event for real-time updates
       window.dispatchEvent(
-        new CustomEvent("subscription-updated", {
-          detail: { subscriptionId, type: "subscription-deleted" },
+        new CustomEvent("subscription-deleted", {
+          detail: { subscriptionId, subscriptionName, type: "subscription-deleted" },
         }),
       )
 

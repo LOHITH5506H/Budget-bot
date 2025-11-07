@@ -14,17 +14,8 @@ export function AiNudgesWidget({ userId }: AiNudgesWidgetProps) {
   const [nudge, setNudge] = useState<string>("")
   const [loading, setLoading] = useState(true)
   const hasLoadedRef = useRef(false) // Prevent duplicate calls on mount
-  const cacheKeyRef = useRef<string>("")
 
   const generateNudge = useCallback(async (force = false) => {
-    // Check cache first - only regenerate once per day unless forced
-    const cacheKey = `ai-insight-${userId}-${new Date().toDateString()}`
-    
-    if (!force && cacheKeyRef.current === cacheKey) {
-      console.log("[AI] Using cached insight for today")
-      return
-    }
-
     setLoading(true)
 
     try {
@@ -33,7 +24,7 @@ export function AiNudgesWidget({ userId }: AiNudgesWidgetProps) {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify({ userId, force }),
       })
 
       if (!response.ok) {
@@ -42,7 +33,10 @@ export function AiNudgesWidget({ userId }: AiNudgesWidgetProps) {
 
       const data = await response.json()
       setNudge(data.insight)
-      cacheKeyRef.current = cacheKey // Mark as cached for today
+      
+      if (force) {
+        console.log("[AI] Forced refresh complete")
+      }
     } catch (error) {
       console.error("Error fetching AI insights:", error)
       setNudge("Keep tracking your expenses to get personalized financial insights!")
@@ -65,6 +59,18 @@ export function AiNudgesWidget({ userId }: AiNudgesWidgetProps) {
     generateNudge(true); // Force refresh when expense updated
   }, [generateNudge]);
 
+  // Listen for subscription updates to refresh AI insights
+  usePusherEvent('subscription-updated', (data) => {
+    console.log("[AIInsights] Received subscription update, regenerating insights");
+    generateNudge(true);
+  }, [generateNudge]);
+
+  // Listen for goal updates to refresh AI insights
+  usePusherEvent('goal-updated', (data) => {
+    console.log("[AIInsights] Received goal update, regenerating insights");
+    generateNudge(true);
+  }, [generateNudge]);
+
   // Listen for custom expense events
   useEffect(() => {
     const handleExpenseAdded = () => {
@@ -72,8 +78,29 @@ export function AiNudgesWidget({ userId }: AiNudgesWidgetProps) {
       generateNudge(true); // Force refresh when expense added
     };
 
+    const handleSubscriptionChange = () => {
+      console.log("[AIInsights] Subscription change event received, regenerating insights");
+      generateNudge(true);
+    };
+
+    const handleGoalChange = () => {
+      console.log("[AIInsights] Goal change event received, regenerating insights");
+      generateNudge(true);
+    };
+
     window.addEventListener('expense-added', handleExpenseAdded);
-    return () => window.removeEventListener('expense-added', handleExpenseAdded);
+    window.addEventListener('subscription-added', handleSubscriptionChange);
+    window.addEventListener('subscription-deleted', handleSubscriptionChange);
+    window.addEventListener('goal-added', handleGoalChange);
+    window.addEventListener('goal-deleted', handleGoalChange);
+    
+    return () => {
+      window.removeEventListener('expense-added', handleExpenseAdded);
+      window.removeEventListener('subscription-added', handleSubscriptionChange);
+      window.removeEventListener('subscription-deleted', handleSubscriptionChange);
+      window.removeEventListener('goal-added', handleGoalChange);
+      window.removeEventListener('goal-deleted', handleGoalChange);
+    };
   }, [generateNudge])
 
   return (

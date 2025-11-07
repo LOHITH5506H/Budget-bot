@@ -220,6 +220,18 @@ export const SubscriptionCreationDialog = forwardRef<HTMLButtonElement, Subscrip
             setLogoSuggestions([]);
             setSelectedLogo("");
             toast({ title: "Subscription Added!", description: `Subscription "${formData.name}" has been recorded.` });
+            
+            // Dispatch event for AI Insights refresh
+            window.dispatchEvent(
+                new CustomEvent("subscription-added", {
+                    detail: { 
+                        name: formData.name,
+                        amount: amountNum,
+                        type: "subscription-added" 
+                    },
+                }),
+            );
+            
             router.refresh();
             console.log("DIALOG (Subscription): Dialog closed, form reset, router refreshed.");
             
