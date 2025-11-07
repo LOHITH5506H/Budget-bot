@@ -124,6 +124,7 @@ export function SubscriptionActions({
 
   const handleDelete = async () => {
     setIsDeleting(true)
+    
     try {
       const supabase = createClient()
       
@@ -143,11 +144,16 @@ export function SubscriptionActions({
         throw error
       }
 
-      // Close dialog FIRST before any state updates
+      // Close dialog immediately
       setIsDeleteOpen(false)
-      setIsDeleting(false)
 
-      // Send Pusher notification (non-blocking)
+      // Show success toast
+      toast({
+        title: "🗑️ Subscription removed",
+        description: `${subscriptionName} has been deleted.`,
+      })
+
+      // Send Pusher notification (non-blocking, ignore errors)
       fetch('/api/pusher/trigger', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -160,31 +166,27 @@ export function SubscriptionActions({
             action: 'deleted'
           }
         })
-      }).catch(err => console.error('❌ Pusher notification failed:', err))
+      }).catch(() => {}) // Silently fail
 
-      toast({
-        title: "🗑️ Subscription removed",
-        description: `${subscriptionName} has been deleted.`,
-      })
-
+      // Dispatch custom event for real-time updates
       window.dispatchEvent(
         new CustomEvent("subscription-updated", {
           detail: { subscriptionId, type: "subscription-deleted" },
         }),
       )
 
-      // Use setTimeout to ensure dialog is fully closed before refresh
-      setTimeout(() => {
-        router.refresh()
-      }, 100)
+      // Force hard reload to ensure UI updates
+      window.location.reload()
+
     } catch (error) {
       console.error("Failed to delete subscription", error)
-      setIsDeleting(false)
       toast({
         title: "❌ Could not delete subscription",
         description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive",
       })
+    } finally {
+      setIsDeleting(false)
     }
   }
 

@@ -113,6 +113,7 @@ export function GoalActions({ goalId, goalName, userId, targetAmount }: GoalActi
 
   const handleDelete = async () => {
     setIsDeleting(true)
+    
     try {
       const supabase = createClient()
       const { error } = await supabase
@@ -127,33 +128,34 @@ export function GoalActions({ goalId, goalName, userId, targetAmount }: GoalActi
         throw error
       }
 
-      // Close dialog FIRST before any state updates
+      // Close dialog immediately
       setIsDeleteOpen(false)
-      setIsDeleting(false)
 
+      // Show success toast
       toast({
         title: "Goal removed",
         description: `${goalName} is no longer active.`,
       })
 
+      // Dispatch custom event for real-time updates
       window.dispatchEvent(
         new CustomEvent("goal-updated", {
           detail: { goalId, type: "goal-deleted" },
         }),
       )
 
-      // Use setTimeout to ensure dialog is fully closed before refresh
-      setTimeout(() => {
-        router.refresh()
-      }, 100)
+      // Force hard reload to ensure UI updates
+      window.location.reload()
+
     } catch (error) {
       console.error("Failed to delete goal", error)
-      setIsDeleting(false)
       toast({
         title: "Could not delete goal",
         description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive",
       })
+    } finally {
+      setIsDeleting(false)
     }
   }
 
