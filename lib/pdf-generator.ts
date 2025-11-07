@@ -63,20 +63,20 @@ class PuppeteerPDFService {
       // Vercel/production environment
       if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
         try {
-          console.log('📦 Importing @sparticuz/chromium...');
-          const chromium = await import('@sparticuz/chromium');
+          console.log('📦 Importing chrome-aws-lambda...');
+          const chrome = await import('chrome-aws-lambda');
           console.log('📦 Importing puppeteer-core...');
           const puppeteerCore = await import('puppeteer-core');
           
-          console.log('🔧 Getting Chromium executable path...');
-          const executablePath = await chromium.default.executablePath();
+          console.log('🔧 Getting Chromium executable path from chrome-aws-lambda...');
+          const executablePath = await chrome.default.executablePath;
           console.log('✅ Chromium executable path:', executablePath);
           
-          console.log('🚀 Launching browser with chromium...');
+          console.log('🚀 Launching browser with chrome-aws-lambda...');
           this.browser = await puppeteerCore.default.launch({
-            args: chromium.default.args,
+            args: chrome.default.args,
             executablePath,
-            headless: true,
+            headless: chrome.default.headless,
           });
           console.log('✅ Browser launched successfully');
         } catch (error) {
