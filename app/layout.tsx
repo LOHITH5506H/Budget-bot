@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { LoadingProvider } from '@/contexts/loading-context';
 import { GlobalPusherProvider } from '@/components/global-pusher-provider';
+import { Toaster } from '@/components/ui/toaster';
 import NextTopLoader from 'nextjs-toploader';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -26,6 +27,7 @@ export default function RootLayout({
         <LoadingProvider>
           <GlobalPusherProvider />
           {children}
+          <Toaster />
         </LoadingProvider>
       </body>
     </html>
