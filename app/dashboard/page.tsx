@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server"
 import { DashboardHeader } from "@/components/dashboard/dashboard-header"
 import { StreakWidget } from "@/components/dashboard/streak-widget"
 import { QuickExpenseWidget } from "@/components/dashboard/quick-expense-widget"
+import { QuickIncomeWidget } from "@/components/dashboard/quick-income-widget"
+import { IncomeExpenseSummary } from "@/components/dashboard/income-expense-summary"
 import { SpendingOverviewWidget } from "@/components/dashboard/spending-overview-widget"
 import { SavingsGoalsWidget } from "@/components/dashboard/savings-goals-widget"
 import { UpcomingSubscriptionsWidget } from "@/components/dashboard/upcoming-subscriptions-widget"
@@ -38,12 +40,16 @@ export default async function DashboardPage() {
               <QuickExpenseWidget userId={user.id} />
             </div>
 
+            {/* Income Entry Row */}
+            <QuickIncomeWidget userId={user.id} />
+
             {/* Spending Overview */}
             <SpendingOverviewWidget userId={user.id} />
           </div>
 
           {/* Right Column */}
           <div className="space-y-6">
+            <IncomeExpenseSummary userId={user.id} />
             <WeeklyReportWidget />
             <SavingsGoalsWidget userId={user.id} />
             <UpcomingSubscriptionsWidget userId={user.id} />

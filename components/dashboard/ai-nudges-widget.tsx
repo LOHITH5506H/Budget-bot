@@ -71,11 +71,22 @@ export function AiNudgesWidget({ userId }: AiNudgesWidgetProps) {
     generateNudge(true);
   }, [generateNudge]);
 
+  // Listen for income updates to refresh AI insights
+  usePusherEvent('income-updated', (data) => {
+    console.log("[AIInsights] Received income update, regenerating insights");
+    generateNudge(true);
+  }, [generateNudge]);
+
   // Listen for custom expense events
   useEffect(() => {
     const handleExpenseAdded = () => {
       console.log("[AIInsights] Expense added event received, regenerating insights");
       generateNudge(true); // Force refresh when expense added
+    };
+
+    const handleIncomeAdded = () => {
+      console.log("[AIInsights] Income added event received, regenerating insights");
+      generateNudge(true); // Force refresh when income added
     };
 
     const handleSubscriptionChange = () => {

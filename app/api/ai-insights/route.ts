@@ -82,6 +82,17 @@ export async function POST(request: NextRequest) {
     const needSpending = totalSpent - wantSpending
     const wantPercentage = (wantSpending / totalSpent) * 100
 
+    // Fetch income data for current month
+    const { data: incomeData } = await supabase
+      .from("income")
+      .select("amount, source, category")
+      .eq("user_id", userId)
+      .gte("received_date", `${currentMonth}-01`)
+      .lt("received_date", nextMonthStr)
+    
+    const totalIncome = incomeData?.reduce((sum, inc) => sum + Number.parseFloat(inc.amount), 0) || 0
+    const savingsRate = totalIncome > 0 ? ((totalIncome - totalSpent) / totalIncome) * 100 : 0
+
     // Fetch savings goals
     const { data: goals } = await supabase
       .from("savings_goals")
@@ -92,10 +103,13 @@ export async function POST(request: NextRequest) {
     // Create context for Gemini API
     const spendingContext = {
       totalSpent,
+      totalIncome,
+      savingsRate,
       needSpending,
       wantSpending,
       wantPercentage,
       transactionCount: expenses.length,
+      incomeSourcesCount: incomeData?.length || 0,
       topCategories: expenses.reduce((acc: any, exp) => {
         const category = (exp.categories as any)?.name || "Other"
         acc[category] = (acc[category] || 0) + Number.parseFloat(exp.amount)
@@ -134,13 +148,13 @@ export async function POST(request: NextRequest) {
               {
                 parts: [
                   {
-                    text: `As a personal finance advisor, provide a brief, actionable insight (max 2 sentences) based on this spending data:
+                    text: `As a personal finance advisor, provide a brief, actionable insight (max 2 sentences) based on this financial data:
 
-Total spent this month: ₹${totalSpent}
-Needs: ₹${needSpending} (${((needSpending / totalSpent) * 100).toFixed(0)}%)
+${totalIncome > 0 ? `Total income this month: ₹${totalIncome}\n` : ''}Total spent this month: ₹${totalSpent}
+${totalIncome > 0 ? `Savings rate: ${savingsRate.toFixed(1)}%\n` : ''}Needs: ₹${needSpending} (${((needSpending / totalSpent) * 100).toFixed(0)}%)
 Wants: ₹${wantSpending} (${wantPercentage.toFixed(0)}%)
 Transactions: ${expenses.length}
-Top spending categories: ${Object.entries(spendingContext.topCategories)
+${incomeData && incomeData.length > 0 ? `Income sources: ${incomeData.length}\n` : ''}Top spending categories: ${Object.entries(spendingContext.topCategories)
                       .slice(0, 3)
                       .map(([cat, amt]) => `${cat}: ₹${amt}`)
                       .join(", ")}
