@@ -38,7 +38,7 @@ export function WeeklyReportWidget() {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `weekly-report-${new Date().toISOString().split('T')[0]}.csv`;
+      link.download = `weekly-report-${new Date().toISOString().split('T')[0]}.pdf`;
       
       // Trigger download
       document.body.appendChild(link);
@@ -78,7 +78,7 @@ export function WeeklyReportWidget() {
       </CardHeader>
       <CardContent>
         <p className="text-sm text-gray-600 mb-4">
-          Get a comprehensive CSV report of your expenses, goals, and subscriptions from the last 7 days.
+          Get a comprehensive PDF report of your expenses, goals, and subscriptions from the last 7 days.
         </p>
         
         <Button
