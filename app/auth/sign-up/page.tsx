@@ -1,17 +1,31 @@
 "use client"
 
-import React, { useState } from "react"; // Added React import
+import React, { useState, useEffect } from "react"; // Added React import
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { TrendingUp, ArrowLeft, Chrome } from "lucide-react";
+import { TrendingUp, ArrowLeft, Chrome, Check, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLoading } from "@/contexts/loading-context";
 import { useLoadingNavigation } from "@/hooks/use-loading-navigation";
 import { useToast } from "@/hooks/use-toast"; // Import useToast
+
+// Password Requirement Component
+function PasswordRequirement({ met, text }: { met: boolean; text: string }) {
+  return (
+    <div className={`flex items-center text-xs ${met ? 'text-green-600' : 'text-gray-500'}`}>
+      {met ? (
+        <Check className="w-3.5 h-3.5 mr-2 flex-shrink-0" />
+      ) : (
+        <X className="w-3.5 h-3.5 mr-2 flex-shrink-0" />
+      )}
+      <span>{text}</span>
+    </div>
+  );
+}
 
 export default function SignUpPage() {
   const [email, setEmail] = useState("");
@@ -19,6 +33,13 @@ export default function SignUpPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [passwordStrength, setPasswordStrength] = useState({
+    hasMinLength: false,
+    hasUpperCase: false,
+    hasLowerCase: false,
+    hasNumber: false,
+    hasSpecialChar: false,
+  });
   const router = useRouter();
   const { showLoading, hideLoading } = useLoading(); // Get global functions
   const { navigateWithLoading } = useLoadingNavigation(); // Navigation with loading
@@ -26,6 +47,19 @@ export default function SignUpPage() {
   const { toast } = useToast(); // Initialize toast
 
   console.log("SIGNUP PAGE: Rendering, isSubmitting (local):", isSubmitting);
+
+  // Validate password strength in real-time
+  useEffect(() => {
+    setPasswordStrength({
+      hasMinLength: password.length >= 8,
+      hasUpperCase: /[A-Z]/.test(password),
+      hasLowerCase: /[a-z]/.test(password),
+      hasNumber: /\d/.test(password),
+      hasSpecialChar: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password),
+    });
+  }, [password]);
+
+  const isPasswordStrong = Object.values(passwordStrength).every(Boolean);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,8 +69,9 @@ export default function SignUpPage() {
       setError("Passwords do not match");
       return;
     }
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters long");
+    
+    if (!isPasswordStrong) {
+      setError("Password does not meet strength requirements");
       return;
     }
 
@@ -141,7 +176,43 @@ export default function SignUpPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="signup-password">Password</Label>
-                <Input id="signup-password" type="password" placeholder="Create a password (min. 6 characters)" required value={password} onChange={(e) => setPassword(e.target.value)} className="h-11" disabled={isSubmitting}/>
+                <Input id="signup-password" type="password" placeholder="Create a strong password" required value={password} onChange={(e) => setPassword(e.target.value)} className="h-11" disabled={isSubmitting}/>
+                
+                {/* Password Strength Indicator */}
+                {password.length > 0 && (
+                  <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
+                    <p className="text-xs font-medium text-gray-700 mb-2">Password Requirements:</p>
+                    <div className="space-y-1.5">
+                      <PasswordRequirement 
+                        met={passwordStrength.hasMinLength} 
+                        text="At least 8 characters" 
+                      />
+                      <PasswordRequirement 
+                        met={passwordStrength.hasUpperCase} 
+                        text="One uppercase letter (A-Z)" 
+                      />
+                      <PasswordRequirement 
+                        met={passwordStrength.hasLowerCase} 
+                        text="One lowercase letter (a-z)" 
+                      />
+                      <PasswordRequirement 
+                        met={passwordStrength.hasNumber} 
+                        text="One number (0-9)" 
+                      />
+                      <PasswordRequirement 
+                        met={passwordStrength.hasSpecialChar} 
+                        text="One special character (!@#$%^&*)" 
+                      />
+                    </div>
+                    {isPasswordStrong && (
+                      <div className="pt-2 mt-2 border-t border-gray-200">
+                        <p className="text-xs font-semibold text-green-600 flex items-center">
+                          <Check className="w-3 h-3 mr-1" /> Strong password!
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="signup-confirmPassword">Confirm Password</Label>
