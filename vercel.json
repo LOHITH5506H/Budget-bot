@@ -4,11 +4,5 @@
       "path": "/api/notifications/schedule",
       "schedule": "0 9 * * *"
     }
-  ],
-  "functions": {
-    "app/api/reports/generate-weekly/route.ts": {
-      "maxDuration": 60,
-      "memory": 1024
-    }
-  }
+  ]
 }

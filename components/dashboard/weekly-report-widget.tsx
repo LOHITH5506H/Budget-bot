@@ -31,14 +31,14 @@ export function WeeklyReportWidget() {
         throw new Error(errorData.error || 'Failed to generate report');
       }
 
-      // Get the PDF as a blob
+      // Get the CSV as a blob
       const blob = await response.blob();
       
       // Create a download link
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `weekly-report-${new Date().toISOString().split('T')[0]}.pdf`;
+      link.download = `weekly-report-${new Date().toISOString().split('T')[0]}.csv`;
       
       // Trigger download
       document.body.appendChild(link);
@@ -78,7 +78,7 @@ export function WeeklyReportWidget() {
       </CardHeader>
       <CardContent>
         <p className="text-sm text-gray-600 mb-4">
-          Get a comprehensive PDF report of your expenses, goals, and subscriptions from the last 7 days.
+          Get a comprehensive CSV report of your expenses, goals, and subscriptions from the last 7 days.
         </p>
         
         <Button
