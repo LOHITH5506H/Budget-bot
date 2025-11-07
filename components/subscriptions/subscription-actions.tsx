@@ -143,6 +143,10 @@ export function SubscriptionActions({
         throw error
       }
 
+      // Close dialog FIRST before any state updates
+      setIsDeleteOpen(false)
+      setIsDeleting(false)
+
       // Send Pusher notification (non-blocking)
       fetch('/api/pusher/trigger', {
         method: 'POST',
@@ -169,17 +173,18 @@ export function SubscriptionActions({
         }),
       )
 
-      setIsDeleteOpen(false)
-      router.refresh()
+      // Use setTimeout to ensure dialog is fully closed before refresh
+      setTimeout(() => {
+        router.refresh()
+      }, 100)
     } catch (error) {
       console.error("Failed to delete subscription", error)
+      setIsDeleting(false)
       toast({
         title: "❌ Could not delete subscription",
         description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive",
       })
-    } finally {
-      setIsDeleting(false)
     }
   }
 
@@ -277,10 +282,10 @@ export function SubscriptionActions({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete {subscriptionName}?</DialogTitle>
+            <DialogDescription>
+              This removes the subscription from your active list. Billing history stays intact.
+            </DialogDescription>
           </DialogHeader>
-          <p className="text-sm text-gray-600">
-            This removes the subscription from your active list. Billing history stays intact.
-          </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDeleteOpen(false)} disabled={isDeleting}>
               Cancel

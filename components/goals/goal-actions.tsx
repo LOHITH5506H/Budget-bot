@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -127,6 +127,10 @@ export function GoalActions({ goalId, goalName, userId, targetAmount }: GoalActi
         throw error
       }
 
+      // Close dialog FIRST before any state updates
+      setIsDeleteOpen(false)
+      setIsDeleting(false)
+
       toast({
         title: "Goal removed",
         description: `${goalName} is no longer active.`,
@@ -138,17 +142,18 @@ export function GoalActions({ goalId, goalName, userId, targetAmount }: GoalActi
         }),
       )
 
-      setIsDeleteOpen(false)
-      router.refresh()
+      // Use setTimeout to ensure dialog is fully closed before refresh
+      setTimeout(() => {
+        router.refresh()
+      }, 100)
     } catch (error) {
       console.error("Failed to delete goal", error)
+      setIsDeleting(false)
       toast({
         title: "Could not delete goal",
         description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive",
       })
-    } finally {
-      setIsDeleting(false)
     }
   }
 
@@ -179,6 +184,7 @@ export function GoalActions({ goalId, goalName, userId, targetAmount }: GoalActi
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add savings to {goalName}</DialogTitle>
+            <DialogDescription>Record a new savings contribution towards your goal.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
@@ -224,10 +230,10 @@ export function GoalActions({ goalId, goalName, userId, targetAmount }: GoalActi
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete {goalName}?</DialogTitle>
+            <DialogDescription>
+              This removes the goal from active tracking. You can recreate it later if needed.
+            </DialogDescription>
           </DialogHeader>
-          <p className="text-sm text-gray-600">
-            This removes the goal from active tracking. You can recreate it later if needed.
-          </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDeleteOpen(false)} disabled={isDeleting}>
               Cancel
